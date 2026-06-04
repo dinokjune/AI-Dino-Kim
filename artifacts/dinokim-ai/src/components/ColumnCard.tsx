@@ -1,7 +1,6 @@
 import { Link } from "wouter";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Column } from "@/data/columns";
-import { PenLine } from "lucide-react";
+import { PenLine, ArrowRight } from "lucide-react";
 
 interface ColumnCardProps {
   column: Column;
@@ -9,26 +8,36 @@ interface ColumnCardProps {
 
 export function ColumnCard({ column }: ColumnCardProps) {
   return (
-    <Link href={`/columns/${column.slug}`}>
-      <Card className="h-full flex flex-col bg-muted/30 border-muted-foreground/20 hover:border-primary/50 transition-colors cursor-pointer">
-        <CardHeader className="space-y-2 pb-4">
-          <div className="flex items-center gap-2 text-primary text-sm font-medium mb-2">
-            <PenLine className="w-4 h-4" />
-            <span>디노킴의 칼럼</span>
+    <Link href={`/columns/${column.slug}`} data-testid={`card-column-${column.id}`}>
+      <div className="group flex flex-col gap-4 bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/15 rounded-2xl p-6 card-lift cursor-pointer hover:border-primary/30 transition-colors">
+        {/* Label */}
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+            <PenLine className="w-3.5 h-3.5 text-primary" />
           </div>
-          <h3 className="text-xl font-bold leading-tight">
+          <span className="text-xs font-semibold text-primary tracking-wide uppercase">
+            디노킴 칼럼
+          </span>
+        </div>
+
+        {/* Title + summary */}
+        <div className="flex-1 space-y-2">
+          <h3 className="font-bold text-[16px] leading-snug text-foreground group-hover:text-primary transition-colors line-clamp-2">
             {column.title}
           </h3>
-        </CardHeader>
-        <CardContent className="flex-1">
-          <p className="text-muted-foreground text-sm line-clamp-3">
+          <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
             {column.summary}
           </p>
-        </CardContent>
-        <CardFooter className="pt-4 text-xs text-muted-foreground">
-          <span>{column.publishedAt}</span>
-        </CardFooter>
-      </Card>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-3 border-t border-primary/10">
+          <span className="text-xs text-muted-foreground">{column.publishedAt}</span>
+          <span className="flex items-center gap-1 text-xs font-medium text-primary group-hover:gap-1.5 transition-all">
+            읽기 <ArrowRight className="w-3.5 h-3.5" />
+          </span>
+        </div>
+      </div>
     </Link>
   );
 }
