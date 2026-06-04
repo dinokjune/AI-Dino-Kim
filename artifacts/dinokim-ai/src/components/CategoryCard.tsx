@@ -5,6 +5,7 @@ import * as Icons from "lucide-react";
 
 interface CategoryCardProps {
   category: Category;
+  index?: number;
 }
 
 const iconGradients = [
@@ -15,34 +16,30 @@ const iconGradients = [
   { bg: "from-emerald-500/15 to-green-500/15", text: "text-emerald-600", border: "border-emerald-200/60" },
 ];
 
-export function CategoryCard({ category, index = 0 }: CategoryCardProps & { index?: number }) {
+export function CategoryCard({ category, index = 0 }: CategoryCardProps) {
   const IconComponent = (Icons as any)[category.icon] || Icons.Folder;
   const style = iconGradients[index % iconGradients.length];
 
   return (
     <Link href={`/categories/${category.slug}`} data-testid={`card-category-${category.id}`}>
-      <div className={`group h-full flex flex-col gap-4 bg-card border ${style.border} rounded-2xl p-6 card-lift cursor-pointer hover:border-primary/30 transition-colors`}>
+      <div className={`group flex items-center gap-3 bg-card border ${style.border} rounded-xl p-4 card-lift cursor-pointer hover:border-primary/30 transition-colors`}>
         {/* Icon */}
-        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${style.bg} border ${style.border} flex items-center justify-center group-hover:scale-105 transition-transform duration-200`}>
-          <IconComponent className={`w-5 h-5 ${style.text}`} />
+        <div className={`w-9 h-9 shrink-0 rounded-lg bg-gradient-to-br ${style.bg} border ${style.border} flex items-center justify-center group-hover:scale-105 transition-transform duration-200`}>
+          <IconComponent className={`w-4 h-4 ${style.text}`} />
         </div>
 
         {/* Text */}
-        <div className="flex-1 space-y-1.5">
-          <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors truncate">
             {category.name}
           </h3>
-          <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
-            {category.description}
-          </p>
+          <p className="text-xs text-muted-foreground truncate">{category.description}</p>
         </div>
 
         {/* Count + arrow */}
-        <div className="flex items-center justify-between pt-3 border-t border-border/50">
-          <span className="text-xs font-medium text-muted-foreground">
-            글 {category.postCount}개
-          </span>
-          <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-xs text-muted-foreground">글 {category.postCount}개</span>
+          <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
         </div>
       </div>
     </Link>
