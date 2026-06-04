@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { siteConfig } from "@/data/siteConfig";
 import { Button } from "@/components/ui/button";
-import { Menu, X, Sparkles } from "lucide-react";
+import { Menu, X, Sparkles, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/hooks/use-theme";
 
 const navLinks = [
   { href: "/categories", label: "카테고리" },
@@ -14,6 +15,7 @@ const navLinks = [
 export function Header() {
   const [open, setOpen] = useState(false);
   const [location] = useLocation();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/80 backdrop-blur-xl">
@@ -47,22 +49,51 @@ export function Header() {
               </Link>
             );
           })}
+
+          {/* Dark mode toggle */}
+          <button
+            onClick={toggleTheme}
+            data-testid="button-theme-toggle"
+            aria-label={theme === "dark" ? "라이트 모드로 전환" : "다크 모드로 전환"}
+            className="ml-1 w-9 h-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            {theme === "dark" ? (
+              <Sun className="w-4 h-4" />
+            ) : (
+              <Moon className="w-4 h-4" />
+            )}
+          </button>
+
           <Link href="/admin" data-testid="link-nav-admin">
-            <Button size="sm" className="ml-2 rounded-lg h-8 px-4 text-sm font-medium shadow-sm">
+            <Button size="sm" className="ml-1 rounded-lg h-8 px-4 text-sm font-medium shadow-sm">
               관리자
             </Button>
           </Link>
         </nav>
 
-        {/* Mobile hamburger */}
-        <button
-          className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors"
-          onClick={() => setOpen(!open)}
-          data-testid="button-mobile-menu"
-          aria-label="메뉴 열기"
-        >
-          {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
+        {/* Mobile right side: theme toggle + hamburger */}
+        <div className="md:hidden flex items-center gap-1">
+          <button
+            onClick={toggleTheme}
+            data-testid="button-theme-toggle-mobile"
+            aria-label={theme === "dark" ? "라이트 모드로 전환" : "다크 모드로 전환"}
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            {theme === "dark" ? (
+              <Sun className="w-4 h-4" />
+            ) : (
+              <Moon className="w-4 h-4" />
+            )}
+          </button>
+          <button
+            className="p-2 rounded-lg hover:bg-muted transition-colors"
+            onClick={() => setOpen(!open)}
+            data-testid="button-mobile-menu"
+            aria-label="메뉴 열기"
+          >
+            {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile menu */}
