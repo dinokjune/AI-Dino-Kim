@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { Post } from "@/data/posts";
 import { categories } from "@/data/categories";
+import { getPostThumbnail } from "@/data/postImages";
 import { ArrowRight, Clock } from "lucide-react";
 
 interface PostCardProps {
@@ -11,6 +12,7 @@ interface PostCardProps {
 export function PostCard({ post, variant = "default" }: PostCardProps) {
   const category = categories.find((c) => c.slug === post.category);
   const readingTime = Math.max(3, Math.ceil(post.body.length / 600));
+  const thumbnail = getPostThumbnail(post.slug);
 
   const gradients: Record<string, string> = {
     "chatgpt-basics": "from-violet-500/10 to-indigo-500/10",
@@ -24,27 +26,38 @@ export function PostCard({ post, variant = "default" }: PostCardProps) {
   return (
     <Link href={`/posts/${post.slug}`} data-testid={`card-post-${post.id}`}>
       <div className="group h-full flex flex-col bg-card border border-border/60 rounded-2xl overflow-hidden card-lift cursor-pointer">
-        {/* Top color bar */}
-        <div className={`h-1.5 w-full bg-gradient-to-r ${gradient}`} />
-
-        <div className="p-6 flex flex-col flex-1 gap-4">
-          {/* Category + date */}
-          <div className="flex items-center justify-between">
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary/8 text-primary border border-primary/12">
+        {/* Thumbnail image */}
+        <div className="relative w-full overflow-hidden" style={{ aspectRatio: "16/9" }}>
+          <img
+            src={thumbnail}
+            alt={post.title}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            loading="lazy"
+          />
+          {/* Category pill overlay */}
+          <div className="absolute top-3 left-3">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-black/60 text-white backdrop-blur-sm">
               {category?.name || post.category}
             </span>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          </div>
+          {/* Reading time overlay */}
+          <div className="absolute top-3 right-3">
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-black/60 text-white backdrop-blur-sm">
               <Clock className="w-3 h-3" />
               {readingTime}분
-            </div>
+            </span>
           </div>
+          {/* Bottom gradient for smooth transition */}
+          <div className={`absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t ${gradient.replace("/10", "/30")} to-transparent`} />
+        </div>
 
+        <div className="p-5 flex flex-col flex-1 gap-3">
           {/* Title + summary */}
           <div className="flex-1 space-y-2">
-            <h3 className="text-[17px] font-bold leading-snug text-foreground group-hover:text-primary transition-colors line-clamp-2">
+            <h3 className="text-[16px] font-bold leading-snug text-foreground group-hover:text-primary transition-colors line-clamp-2">
               {post.title}
             </h3>
-            <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
+            <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
               {post.summary}
             </p>
           </div>

@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { siteConfig } from "@/data/siteConfig";
 import { categories } from "@/data/categories";
 import { getLocalPosts, getLocalColumns } from "@/lib/store";
+import { getPostThumbnail } from "@/data/postImages";
 import { PostCard } from "@/components/PostCard";
 import { CategoryCard } from "@/components/CategoryCard";
 import { ColumnCard } from "@/components/ColumnCard";
@@ -141,25 +142,32 @@ export default function Home() {
                 <h2 className="text-2xl font-bold tracking-tight">최근 추가된 가이드</h2>
               </div>
               <div className="space-y-2">
-                {latestPosts.map((post, i) => {
+                {latestPosts.map((post) => {
                   const cat = categories.find((c) => c.slug === post.category);
+                  const thumb = getPostThumbnail(post.slug);
                   return (
                     <Link key={post.id} href={`/posts/${post.slug}`} data-testid={`link-latest-post-${post.id}`}>
-                      <div className="group flex items-start gap-4 p-4 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer">
-                        <div className="w-8 h-8 shrink-0 rounded-lg bg-muted flex items-center justify-center text-sm font-bold text-muted-foreground">
-                          {String(i + 1).padStart(2, "0")}
+                      <div className="group flex items-center gap-4 p-3 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer">
+                        {/* 썸네일 */}
+                        <div className="w-20 h-14 shrink-0 rounded-lg overflow-hidden bg-muted">
+                          <img
+                            src={thumb}
+                            alt={post.title}
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            loading="lazy"
+                          />
                         </div>
-                        <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex-1 min-w-0 space-y-0.5">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-medium text-primary">{cat?.name}</span>
+                            <span className="text-xs font-semibold text-primary">{cat?.name}</span>
                             <span className="text-xs text-muted-foreground">{post.publishedAt}</span>
                           </div>
-                          <h3 className="font-semibold text-[15px] text-foreground group-hover:text-primary transition-colors line-clamp-1 leading-snug">
+                          <h3 className="font-semibold text-[14px] text-foreground group-hover:text-primary transition-colors line-clamp-1 leading-snug">
                             {post.title}
                           </h3>
-                          <p className="text-sm text-muted-foreground line-clamp-1">{post.summary}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-1">{post.summary}</p>
                         </div>
-                        <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0 mt-1 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                        <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
                       </div>
                     </Link>
                   );

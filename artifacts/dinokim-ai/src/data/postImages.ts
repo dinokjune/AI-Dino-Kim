@@ -1,81 +1,86 @@
 /**
  * 각 포스트 슬러그별 이미지 URL (2~3장)
- * picsum.photos — seed 값으로 항상 동일한 이미지가 일관성 있게 로드됩니다
+ * Picsum 특정 ID 사용 — AI/기술/업무 관련 사진들
  */
 export const postImages: Record<string, string[]> = {
   "chatgpt-beginners-guide": [
-    "https://picsum.photos/seed/chatgpt-start/900/500",
-    "https://picsum.photos/seed/chatgpt-typing/900/500",
-    "https://picsum.photos/seed/chatgpt-screen/900/500",
+    "https://picsum.photos/id/48/900/500",   // 노트북 + 책상
+    "https://picsum.photos/id/119/900/500",  // 커피 + 노트북 작업 공간
+    "https://picsum.photos/id/365/900/500",  // 화면/디스플레이
   ],
   "chatgpt-free-vs-plus": [
-    "https://picsum.photos/seed/chatgpt-plan/900/500",
-    "https://picsum.photos/seed/chatgpt-compare/900/500",
-    "https://picsum.photos/seed/chatgpt-mobile/900/500",
+    "https://picsum.photos/id/60/900/500",   // 노트북 열린 화면
+    "https://picsum.photos/id/160/900/500",  // 디지털 인터페이스
+    "https://picsum.photos/id/48/900/500",   // 작업 환경
   ],
   "chatgpt-common-mistakes": [
-    "https://picsum.photos/seed/mistake-ai/900/500",
-    "https://picsum.photos/seed/mistake-keyboard/900/500",
-    "https://picsum.photos/seed/mistake-screen/900/500",
+    "https://picsum.photos/id/119/900/500",  // 집중하는 작업
+    "https://picsum.photos/id/20/900/500",   // 창의적 환경
+    "https://picsum.photos/id/366/900/500",  // 디지털 화면
   ],
   "chatgpt-conversation-tips": [
-    "https://picsum.photos/seed/convo-ai/900/500",
-    "https://picsum.photos/seed/convo-laptop/900/500",
-    "https://picsum.photos/seed/convo-desk/900/500",
+    "https://picsum.photos/id/1/900/500",    // 미팅/대화
+    "https://picsum.photos/id/453/900/500",  // 협업 공간
+    "https://picsum.photos/id/48/900/500",   // 노트북
   ],
   "prompt-basic-structure": [
-    "https://picsum.photos/seed/prompt-structure/900/500",
-    "https://picsum.photos/seed/prompt-writing/900/500",
-    "https://picsum.photos/seed/prompt-board/900/500",
+    "https://picsum.photos/id/180/900/500",  // 구조적 디자인
+    "https://picsum.photos/id/3/900/500",    // 아이디어 작업
+    "https://picsum.photos/id/119/900/500",  // 작업 공간
   ],
   "prompt-role-setting": [
-    "https://picsum.photos/seed/role-setting/900/500",
-    "https://picsum.photos/seed/role-expert/900/500",
-    "https://picsum.photos/seed/role-ai/900/500",
+    "https://picsum.photos/id/453/900/500",  // 전문가 환경
+    "https://picsum.photos/id/160/900/500",  // 디지털 작업
+    "https://picsum.photos/id/60/900/500",   // 노트북
   ],
   "prompt-templates": [
-    "https://picsum.photos/seed/template-work/900/500",
-    "https://picsum.photos/seed/template-doc/900/500",
-    "https://picsum.photos/seed/template-list/900/500",
+    "https://picsum.photos/id/366/900/500",  // 서류/문서
+    "https://picsum.photos/id/48/900/500",   // 작업
+    "https://picsum.photos/id/180/900/500",  // 구조
   ],
   "ai-image-tools-comparison": [
-    "https://picsum.photos/seed/image-ai-art/900/500",
-    "https://picsum.photos/seed/image-generate/900/500",
-    "https://picsum.photos/seed/image-compare/900/500",
+    "https://picsum.photos/id/20/900/500",   // 창의적 이미지
+    "https://picsum.photos/id/3/900/500",    // 아트워크 느낌
+    "https://picsum.photos/id/160/900/500",  // 디지털 아트
   ],
   "perplexity-ai-guide": [
-    "https://picsum.photos/seed/perplexity-search/900/500",
-    "https://picsum.photos/seed/perplexity-answer/900/500",
-    "https://picsum.photos/seed/perplexity-result/900/500",
+    "https://picsum.photos/id/453/900/500",  // 검색/탐색 느낌
+    "https://picsum.photos/id/119/900/500",  // 노트북 사용
+    "https://picsum.photos/id/366/900/500",  // 정보 탐색
   ],
   "notion-ai-guide": [
-    "https://picsum.photos/seed/notion-workspace/900/500",
-    "https://picsum.photos/seed/notion-notes/900/500",
-    "https://picsum.photos/seed/notion-ai/900/500",
+    "https://picsum.photos/id/3/900/500",    // 노트/정리
+    "https://picsum.photos/id/180/900/500",  // 구조화된 작업
+    "https://picsum.photos/id/60/900/500",   // 작업 화면
   ],
   "claude-vs-chatgpt": [
-    "https://picsum.photos/seed/claude-chatgpt/900/500",
-    "https://picsum.photos/seed/ai-compare-tools/900/500",
-    "https://picsum.photos/seed/llm-chat/900/500",
+    "https://picsum.photos/id/160/900/500",  // 비교/선택
+    "https://picsum.photos/id/48/900/500",   // AI 도구 사용
+    "https://picsum.photos/id/453/900/500",  // 분석 환경
   ],
   "email-automation-ai": [
-    "https://picsum.photos/seed/email-draft/900/500",
-    "https://picsum.photos/seed/email-compose/900/500",
-    "https://picsum.photos/seed/email-office/900/500",
+    "https://picsum.photos/id/1/900/500",    // 커뮤니케이션
+    "https://picsum.photos/id/119/900/500",  // 업무 환경
+    "https://picsum.photos/id/60/900/500",   // 이메일 작성
   ],
   "meeting-summary-ai": [
-    "https://picsum.photos/seed/meeting-room/900/500",
-    "https://picsum.photos/seed/meeting-notes/900/500",
-    "https://picsum.photos/seed/meeting-record/900/500",
+    "https://picsum.photos/id/453/900/500",  // 미팅/회의
+    "https://picsum.photos/id/366/900/500",  // 회의록/문서
+    "https://picsum.photos/id/3/900/500",    // 정리 작업
   ],
   "ai-blog-writing": [
-    "https://picsum.photos/seed/blog-writing/900/500",
-    "https://picsum.photos/seed/blog-laptop/900/500",
-    "https://picsum.photos/seed/blog-editor/900/500",
+    "https://picsum.photos/id/20/900/500",   // 글쓰기/창작
+    "https://picsum.photos/id/60/900/500",   // 작성 환경
+    "https://picsum.photos/id/119/900/500",  // 카페 작업
   ],
   "ai-report-writing": [
-    "https://picsum.photos/seed/report-desk/900/500",
-    "https://picsum.photos/seed/report-document/900/500",
-    "https://picsum.photos/seed/report-analysis/900/500",
+    "https://picsum.photos/id/366/900/500",  // 보고서/문서
+    "https://picsum.photos/id/180/900/500",  // 분석/구조
+    "https://picsum.photos/id/48/900/500",   // 전문 작업
   ],
 };
+
+/** 특정 포스트의 대표 썸네일(첫 번째 이미지) */
+export function getPostThumbnail(slug: string): string {
+  return postImages[slug]?.[0] ?? "https://picsum.photos/id/119/900/500";
+}
