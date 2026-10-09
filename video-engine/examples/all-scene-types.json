@@ -1,0 +1,20 @@
+{
+  "meta": { "title": "장면 타입 견본", "channel": "채널 이름", "url": "youtube.com/@your-channel", "tone": "stage", "bgmVolume": 0.2 },
+  "scenes": [
+    { "beat": "훅", "type": "monitors", "count": 6, "labels": ["A", "B", "C", "D", "E", "F"], "say": "같은 재료, *여섯 가지 결과*." },
+    { "beat": "말풍선", "type": "bubble", "text": "이렇게만 하면 되겠지?", "mood": "happy", "wall": "purple", "say": "처음엔 다들 이렇게 생각하죠." },
+    { "beat": "비교", "type": "compare", "verdict": "right", "wall": "green", "left": { "label": "전", "mode": "choppy", "text": "끊김" }, "right": { "label": "후", "mode": "smooth", "text": "이어짐" }, "say": "왼쪽은 끊기고, 오른쪽은 *이어집니다*." },
+    { "beat": "숫자", "type": "number", "value": "1,234", "suffix": "개", "icon": "chart", "countUp": false, "label": "라벨", "wall": "peach", "say": "숫자는 처음부터 *최종값*으로 보여 줄 수도 있어요." },
+    { "beat": "깔때기", "type": "funnel", "wall": "parchment", "steps": [{ "value": "1,000", "label": "수집" }, { "value": "640", "label": "정리" }, { "value": "12", "label": "분류" }], "say": "모으고, 걸러내고, *묶습니다*." },
+    { "beat": "선언", "type": "title", "icon": "key", "text": "핵심은 *하나*", "sub": "부제는 여기에", "wall": "olive", "say": "핵심은 딱 *하나*예요." },
+    { "beat": "게시물", "type": "typing", "name": "누군가", "handle": "@someone · 1d", "likes": 1700, "text": "여기에 프롬프트나 인용문이 타이핑됩니다.", "say": "이런 글이 많이 돌아다니죠." },
+    { "beat": "나열", "type": "line", "title": "다섯 가지", "items": [{ "icon": "ruler", "text": "하나" }, { "icon": "robot", "text": "둘" }, { "icon": "doc", "text": "셋" }], "say": "*하나*, *둘*, *셋*." },
+    { "beat": "프레임워크", "type": "cards", "title": "카드 제목", "items": [{ "icon": "doc", "title": "규칙", "text": "설명" }, { "icon": "film", "title": "예시", "text": "설명" }, { "icon": "target", "title": "기준", "text": "설명" }], "say": "세 칸으로 정리합니다." },
+    { "beat": "단계", "type": "step", "n": 2, "total": 5, "badge": "둘째", "icon": "folder", "text": "단계 설명", "say": "둘째, *재료*를 준비해요." },
+    { "beat": "체크리스트", "type": "checklist", "title": "지킬 것", "items": ["항목 하나", "항목 둘", "항목 셋"], "wall": "green", "say": "이것만 지키면 돼요." },
+    { "beat": "눈 검수", "type": "grid", "cols": 6, "rows": 4, "flags": [3, 15], "title": "한 장에 펼치기", "wall": "dark", "say": "전체를 한 장에 펼쳐 봅니다." },
+    { "beat": "숫자 검수", "type": "meters", "title": "목표와 비교", "wall": "dark", "items": [{ "label": "밝기", "value": 0.6, "target": [0.4, 0.7] }, { "label": "속도", "value": 0.85, "target": [0.3, 0.6], "note": "목표 초과" }], "say": "목표 구간을 *벗어나면* 경고가 뜹니다." },
+    { "beat": "요약", "type": "cards", "stamp": true, "items": [{ "num": "1", "title": "첫째", "text": "" }, { "num": "2", "title": "둘째", "text": "" }, { "num": "3", "title": "셋째", "text": "" }], "say": "정리하면 *세 가지*." },
+    { "beat": "엔드카드", "type": "endcard", "dur": 5, "say": "구독과 좋아요 부탁드려요." }
+  ]
+}

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>무대형 모션 영상 엔진</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #1b1714; --panel: #26201c; --ink: #f3ece0; --muted: #b8ab9a; --accent: #f4d03f; --line: #3a312b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Gowun Dodum', system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; flex-wrap: wrap; }
+  header h1 { font-family: 'Jua', sans-serif; font-size: 22px; margin: 0 8px 0 0; font-weight: 400; }
+  button, label.btn { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 14px; font: inherit; cursor: pointer; }
+  button.primary { background: var(--accent); color: #2b2522; border-color: var(--accent); font-family: 'Jua'; }
+  button:disabled { opacity: .5; cursor: default; }
+  .chk { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14px; }
+  #wrap { padding: 0 16px; }
+  #stage canvas { width: 100% !important; height: auto !important; display: block; border-radius: 10px; background: #000; }
+  #bar { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+  #seek { flex: 1; accent-color: var(--accent); }
+  #time { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 120px; text-align: right; }
+  #scenes { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0 24px; }
+  #scenes button { font-size: 13px; padding: 5px 10px; }
+  #scenes button.on { border-color: var(--accent); color: var(--accent); }
+  #drop { position: fixed; inset: 0; background: rgba(244,208,63,.15); border: 4px dashed var(--accent);
+    display: none; align-items: center; justify-content: center; font-family: 'Jua'; font-size: 40px; }
+  .warm { position: absolute; left: -9999px; font-family: 'Jua'; } .warm2 { position: absolute; left: -9999px; font-family: 'Gowun Dodum'; }
+</style>
+</head>
+<body>
+<span class="warm">가나다</span><span class="warm2">가나다</span>
+<header>
+  <h1>무대형 모션 영상 엔진</h1>
+  <button id="play" class="primary">▶ 재생</button>
+  <button id="restart">⏮ 처음</button>
+  <button id="rec">● WebM 녹화</button>
+  <button id="sheet">▦ 컨택트시트</button>
+  <label class="btn">대본 JSON 불러오기<input id="file" type="file" accept=".json,application/json" hidden></label>
+  <span class="chk"><input type="checkbox" id="bgm" checked><label for="bgm">BGM</label></span>
+  <span class="chk"><input type="checkbox" id="tts"><label for="tts">TTS 미리듣기</label></span>
+</header>
+<div id="wrap">
+  <div id="stage"></div>
+  <div id="bar"><input id="seek" type="range" min="0" max="1000" value="0"><span id="time">0.0 / 0.0s</span></div>
+  <div id="scenes"></div>
+</div>
+<div id="drop">대본 JSON을 놓으세요</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="src/lib.js"></script>
+<script src="src/tones.js"></script>
+<script src="src/graphics.js"></script>
+<script src="src/mascot.js"></script>
+<script src="src/scenes.js"></script>
+<script src="src/audio.js"></script>
+<script src="script.js"></script>
+<script src="src/engine.js"></script>
+<script>
+  // 대본 파일을 ?script=파일명.js 로 바꿔 끼울 수도 있다 (window.SCRIPT_DATA 를 정의하는 파일)
+  const UI = {
+    $: (id) => document.getElementById(id),
+    bgmOn() { return this.$('bgm').checked; },
+    ttsOn() { return this.$('tts').checked; },
+    init() {
+      document.fonts && document.fonts.load('64px Jua');
+      document.fonts && document.fonts.load('40px "Gowun Dodum"');
+      this.$('play').onclick = () => (playing ? pause() : play());
+      this.$('restart').onclick = () => seek(0);
+      this.$('rec').onclick = () => { if (!recorder) record(); this.sync(); };
+      this.$('sheet').onclick = () => contactSheet();
+      this.$('seek').oninput = (e) => seek((e.target.value / 1000) * TOTAL);
+      this.$('bgm').onchange = () => { if (playing) { pause(); play(); } };
+      this.$('file').onchange = (e) => e.target.files[0] && this.readFile(e.target.files[0]);
+      const drop = this.$('drop');
+      addEventListener('dragover', (e) => { e.preventDefault(); drop.style.display = 'flex'; });
+      addEventListener('dragleave', (e) => { if (e.target === drop) drop.style.display = 'none'; });
+      addEventListener('drop', (e) => { e.preventDefault(); drop.style.display = 'none'; const f = e.dataTransfer.files[0]; f && this.readFile(f); });
+      this.sync();
+    },
+    readFile(f) {
+      f.text().then((s) => { try { pause(); loadScript(JSON.parse(s)); } catch (err) { alert('JSON을 읽지 못했습니다: ' + err.message); } });
+    },
+    rebuild() {
+      const box = this.$('scenes'); if (!box) return;
+      box.innerHTML = '';
+      TL.forEach((e) => {
+        const b = document.createElement('button');
+        b.textContent = `${e.i + 1}. ${e.s.beat || e.s.type}`;
+        b.title = stripMarks(e.s.say || '');
+        b.onclick = () => seek(e.start + 0.01);
+        box.appendChild(b);
+      });
+      document.title = (META().title || '무대형 모션 영상 엔진');
+    },
+    sync() {
+      this.$('play').textContent = playing ? '❚❚ 일시정지' : '▶ 재생';
+      this.$('rec').textContent = recorder ? '● 녹화 중…' : '● WebM 녹화';
+      this.$('rec').disabled = !!recorder;
+    },
+    frame() {
+      this.$('seek').value = TOTAL ? Math.round((curT / TOTAL) * 1000) : 0;
+      this.$('time').textContent = `${curT.toFixed(1)} / ${TOTAL.toFixed(1)}s`;
+      const si = sceneAt(curT);
+      [...this.$('scenes').children].forEach((b, i) => b.classList.toggle('on', i === si));
+    },
+  };
+  const qs = new URLSearchParams(location.search).get('script');
+  if (qs) document.write(`<script src="${qs.replace(/[^\w.\-\/]/g, '')}"><\/script>`);
+</script>
+</body>
+</html>
