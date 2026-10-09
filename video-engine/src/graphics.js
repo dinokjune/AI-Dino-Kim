@@ -13,7 +13,7 @@ function buildGrain() {
   GRAIN.updatePixels();
 }
 
-function drawStage(wallHex) {
+function drawStageClassic(wallHex) {
   background(wallHex);
   // 벽지 세로 줄무늬
   const dark = isDark(wallHex);
@@ -33,7 +33,8 @@ function drawGrainAndVignette() {
     image(GRAIN, 0, 0, W, H);
     pop();
   }
-  // 비네트
+  // 비네트 (밝고 깨끗해야 하는 톤은 생략)
+  if (['flat', 'ui', 'pastel'].includes(TONE.engine.bg)) return;
   const g = drawingContext.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95);
   g.addColorStop(0, 'rgba(0,0,0,0)');
   g.addColorStop(1, 'rgba(0,0,0,0.28)');
@@ -77,7 +78,7 @@ function drawCurtains(amount) {
 // ── 아이콘 (단위 공간 -50..50) ─────────────────────────────
 function drawIcon(name, x, y, size, t = 0) {
   push(); translate(x, y); scale(size / 100);
-  stroke(PAL.ink); strokeWeight(6); strokeJoin(ROUND); strokeCap(ROUND);
+  stroke(LINE()); strokeWeight(6); strokeJoin(ROUND); strokeCap(ROUND);
   const I = ICONS[name] || ICONS.star;
   I(t);
   pop();
@@ -162,5 +163,5 @@ function drawThumb(x, y, w, h, seed, t) {
       }
     }
   });
-  noFill(); stroke(PAL.ink); strokeWeight(4); rect(x, y, w, h, 10);
+  noFill(); stroke(LINE()); strokeWeight(4); rect(x, y, w, h, 10);
 }

@@ -1,7 +1,7 @@
 // 오리지널 마스코트 "디노" (둥근 아기 공룡 퍼펫). 원점은 발밑.
 // mood: happy | think | sweat | wow | point | wave | sad
 function drawDino(x, y, s, mood, t, walking = false) {
-  const ink = PAL.ink;
+  const ink = LINE(), eyeInk = PAL.eye || '#2B2522';
   push();
   translate(x, y);
   scale(s);
@@ -61,7 +61,7 @@ function drawDino(x, y, s, mood, t, walking = false) {
   for (const ex of [-36, 36]) {
     fill('#FFFFFF'); ellipse(ex, -140, 50, 56 * blink);
     if (blink > 0.5) {
-      noStroke(); fill(ink); ellipse(ex + look * 0.6, -137, 22, 26);
+      noStroke(); fill(eyeInk); ellipse(ex + look * 0.6, -137, 22, 26);
       fill('#FFFFFF'); ellipse(ex + look * 0.6 + 5, -143, 7, 8);
       stroke(ink);
     }
@@ -88,7 +88,7 @@ function drawDino(x, y, s, mood, t, walking = false) {
     }
   }
   if (mood === 'think') {
-    noStroke(); fill(ink); textFont(FONT_HEAD); textSize(70); textAlign(CENTER, CENTER);
+    noStroke(); fill(ink); useFont(FONT_HEAD); textSize(70); textAlign(CENTER, CENTER);
     text('?', 100, -250 + Math.sin(t * 4) * 6);
   }
   if (mood === 'wow') {

@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>톤 카드 영상 스튜디오</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=Gaegu:wght@400;700&family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;700&family=Jua&family=Nanum+Gothic+Coding:wght@400;700&family=Noto+Sans+KR:wght@400;700;900&family=Noto+Serif+KR:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #17130f; --panel: #221c17; --panel2: #2b241e; --line: #3a3029; --ink: #f3ece0; --muted: #b3a593;
+    --accent: #f4d03f; --accent-ink: #2b2522; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --info: #93c5fd;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Gowun Dodum', 'Noto Sans KR', system-ui, sans-serif; font-size: 15px; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 5; flex-wrap: wrap; }
+  header h1 { font-family: 'Jua', sans-serif; font-weight: 400; font-size: 22px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  .grow { flex: 1; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+  .badge.on { color: var(--ok); border-color: #2f5a3d; }
+  .badge.off { color: var(--warn); border-color: #5a4a2a; }
+  main { display: grid; grid-template-columns: minmax(380px, 520px) 1fr; gap: 20px; padding: 20px; align-items: start; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } .preview { position: static !important; order: -1; } }
+  @media (max-width: 600px) { main { padding: 16px 16px; } header { padding: 12px 16px; } }
+  section.step { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 16px; }
+  section.step > h2 { font-family: 'Jua'; font-weight: 400; font-size: 19px; margin: 0 0 4px; display: flex; gap: 10px; align-items: center; }
+  section.step > h2 .n { background: var(--accent); color: var(--accent-ink); width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 15px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; line-height: 1.5; }
+  .tones { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .tone { text-align: left; background: var(--panel2); border: 2px solid transparent; border-radius: 12px; padding: 0; cursor: pointer; overflow: hidden; }
+  .tone:hover { border-color: var(--line); }
+  .tone.on { border-color: var(--accent); }
+  .tone .sw { display: flex; height: 34px; }
+  .tone .sw span { flex: 1; }
+  .tone .nm { padding: 8px 10px 2px; font-family: 'Jua'; font-size: 16px; }
+  .tone .en { padding: 0 10px 9px; color: var(--muted); font-size: 12px; }
+  .card-detail { margin-top: 12px; background: var(--panel2); border-radius: 12px; padding: 14px; font-size: 13.5px; line-height: 1.55; }
+  .card-detail h3 { font-family: 'Jua'; font-weight: 400; margin: 0 0 6px; font-size: 17px; }
+  .card-detail dl { display: grid; grid-template-columns: 70px 1fr; gap: 3px 10px; margin: 10px 0; }
+  .card-detail dt { color: var(--accent); }
+  .card-detail dd { margin: 0; }
+  .targets { display: flex; gap: 8px; flex-wrap: wrap; }
+  .targets span { background: #1b1612; border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: 12.5px; }
+  label.f { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 5px; }
+  input[type=text], input[type=password], select, textarea { width: 100%; background: #15110d; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  textarea { min-height: 90px; resize: vertical; font-size: 13.5px; }
+  textarea.code { font-family: 'Nanum Gothic Coding', monospace; min-height: 220px; font-size: 12.5px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .row > * { flex: 0 0 auto; }
+  .row .fill { flex: 1 1 160px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { background: var(--panel2); border: 1px solid var(--line); border-radius: 99px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+  .chip:hover { border-color: var(--accent); }
+  button.b { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; cursor: pointer; }
+  button.b:hover:not(:disabled) { border-color: var(--muted); }
+  button.b.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-family: 'Jua'; font-size: 16px; }
+  button.b:disabled { opacity: .45; cursor: default; }
+  .status { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 18px; white-space: pre-wrap; }
+  .status.err { color: var(--bad); }
+  .progress { height: 6px; background: #15110d; border-radius: 99px; overflow: hidden; margin-top: 10px; }
+  .progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .preview { position: sticky; top: 76px; }
+  .preview .frame { background: #000; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
+  #stage canvas { width: 100% !important; height: auto !important; display: block; }
+  .controls { display: flex; gap: 8px; align-items: center; padding: 10px 0; flex-wrap: wrap; }
+  #seek { flex: 1 1 200px; accent-color: var(--accent); }
+  #time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; min-width: 104px; text-align: right; }
+  .chk { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; }
+  #scenes { display: flex; flex-wrap: wrap; gap: 5px; }
+  #scenes button { font-size: 12px; padding: 4px 9px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); cursor: pointer; }
+  #scenes button.on { border-color: var(--accent); color: var(--accent); }
+  #scenes button .v { color: var(--ok); margin-left: 3px; }
+  .qa { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+  .qa li { background: var(--panel2); border-radius: 10px; padding: 10px 12px; border-left: 4px solid var(--muted); font-size: 13.5px; }
+  .qa li.pass { border-color: var(--ok); } .qa li.warn { border-color: var(--warn); } .qa li.fail { border-color: var(--bad); } .qa li.info { border-color: var(--info); }
+  .qa li b { display: block; margin-bottom: 3px; }
+  .qa li pre { margin: 0; white-space: pre-wrap; font-family: inherit; color: var(--muted); }
+  .qa li button { margin-top: 6px; font-size: 12px; padding: 4px 9px; }
+  .lessons { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+  .lessons li { display: flex; gap: 8px; align-items: start; background: var(--panel2); border-radius: 8px; padding: 8px 10px; font-size: 13.5px; }
+  .lessons li span { flex: 1; }
+  .lessons li button { background: none; border: 0; color: var(--muted); cursor: pointer; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 10px; }
+  dialog { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; padding: 20px; width: min(520px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog h2 { font-family: 'Jua'; font-weight: 400; margin: 0 0 6px; }
+  #drop { position: fixed; inset: 0; background: rgba(244,208,63,.15); border: 4px dashed var(--accent); display: none; align-items: center; justify-content: center; font-family: 'Jua'; font-size: 34px; z-index: 20; }
+</style>
+</head>
+<body>
+<header>
+  <h1>톤 카드 영상 스튜디오</h1>
+  <span class="sub">톤을 고르고 주제를 넣으면, 대본 → 내 목소리 → 영상 → 검수까지</span>
+  <span class="grow"></span>
+  <span id="st-server" class="badge">서버 확인 중</span>
+  <span id="st-claude" class="badge">Claude</span>
+  <span id="st-voice" class="badge">Cartesia</span>
+  <button class="b" id="btn-settings">⚙ 설정</button>
+</header>
+
+<main>
+  <div class="steps">
+    <section class="step">
+      <h2><span class="n">1</span>톤 카드 고르기</h2>
+      <p class="hint">톤마다 주인공·바탕·글꼴·자막·전환·효과음·음악·금지 사항 11개와 목표 숫자가 정해져 있습니다. 고르면 오른쪽 영상이 바로 그 톤으로 바뀝니다.</p>
+      <div class="tones" id="tones"></div>
+      <div class="card-detail" id="card-detail"></div>
+    </section>
+
+    <section class="step">
+      <h2><span class="n">2</span>주제와 대본</h2>
+      <label class="f" for="topic">주제</label>
+      <input type="text" id="topic" placeholder="예: 일주일에 책 한 권 읽는 법">
+      <div class="chips" id="topic-chips"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="b" id="btn-topics">✨ AI 주제 추천</button>
+        <select id="length" class="fill" aria-label="영상 길이"></select>
+      </div>
+      <details>
+        <summary>참고 자료 · 채널 정보</summary>
+        <label class="f" for="source">참고 자료 (원고, 기사, 메모 – 여기 있는 사실만 숫자로 씁니다)</label>
+        <textarea id="source" placeholder="붙여 넣은 내용은 대본의 근거와 숫자 검문에 쓰입니다"></textarea>
+        <div class="row">
+          <div class="fill"><label class="f" for="channel">채널 이름</label><input type="text" id="channel" placeholder="AI활용연구소"></div>
+          <div class="fill"><label class="f" for="url">채널 주소</label><input type="text" id="url" placeholder="youtube.com/@..."></div>
+        </div>
+      </details>
+      <div class="row" style="margin-top:14px">
+        <button class="b primary" id="btn-script">대본 만들기</button>
+        <button class="b" id="btn-copy">프롬프트 복사</button>
+        <button class="b" id="btn-paste">JSON 붙여넣기</button>
+      </div>
+      <div id="paste-box" hidden>
+        <textarea id="paste" class="code" placeholder="Claude가 준 대본 JSON을 붙여 넣으세요"></textarea>
+        <button class="b" id="btn-apply-paste" style="margin-top:8px">적용</button>
+      </div>
+      <div class="status" id="script-status"></div>
+    </section>
+
+    <section class="step">
+      <h2><span class="n">3</span>내 목소리 입히기</h2>
+      <p class="hint">Cartesia에서 클론한 내 목소리로 장면마다 내레이션을 만들고, 단어별 시간표에 맞춰 자막과 장면 길이를 자동으로 맞춥니다.</p>
+      <label class="f" for="voice-id">Cartesia 목소리 ID</label>
+      <input type="text" id="voice-id" placeholder="play.cartesia.ai → My Voices → 목소리 선택 → ID 복사">
+      <div class="row" style="margin-top:10px">
+        <button class="b primary" id="btn-voice">모든 장면 음성 만들기</button>
+        <button class="b" id="btn-voice-clear">음성 지우기</button>
+      </div>
+      <div class="progress"><i id="voice-bar"></i></div>
+      <div class="status" id="voice-status"></div>
+    </section>
+
+    <section class="step">
+      <h2><span class="n">4</span>검수</h2>
+      <p class="hint">만든 AI에게 묻지 않고 화면을 직접 잽니다. 숫자 검문, 장면 속도, 밝기, 움직임, 정지 화면, 자막 속도, 음량을 톤 카드 목표와 비교합니다. 눈 검수는 컨택트시트로 하세요.</p>
+      <div class="row">
+        <button class="b primary" id="btn-qa">숫자 검수 실행</button>
+        <button class="b" id="btn-sheet">▦ 눈 검수용 컨택트시트</button>
+      </div>
+      <ul class="qa" id="qa"></ul>
+      <label class="f" for="lesson">실수 노트 – 여기 적은 규칙은 다음 대본부터 항상 지켜집니다</label>
+      <div class="row"><input type="text" id="lesson" class="fill" placeholder="예: 숫자는 처음부터 최종값으로 보여 준다"><button class="b" id="btn-lesson">추가</button></div>
+      <ul class="lessons" id="lessons"></ul>
+    </section>
+  </div>
+
+  <div class="preview">
+    <div class="frame"><div id="stage"></div></div>
+    <div class="controls">
+      <button class="b primary" id="play">▶ 재생</button>
+      <button class="b" id="restart" aria-label="처음으로">⏮</button>
+      <input id="seek" type="range" min="0" max="1000" value="0" aria-label="재생 위치">
+      <span id="time">0.0 / 0.0s</span>
+    </div>
+    <div class="controls">
+      <button class="b" id="rec">● WebM 녹화</button>
+      <button class="b" id="btn-json">대본 JSON 저장</button>
+      <button class="b" id="btn-edit">대본 편집</button>
+      <span class="chk"><input type="checkbox" id="bgm" checked><label for="bgm">BGM</label></span>
+      <span class="chk"><input type="checkbox" id="tts"><label for="tts">브라우저 TTS 미리듣기</label></span>
+    </div>
+    <div id="scenes"></div>
+    <div id="edit-box" hidden style="margin-top:10px">
+      <textarea id="editor" class="code"></textarea>
+      <button class="b" id="btn-apply-edit" style="margin-top:8px">편집 적용</button>
+    </div>
+  </div>
+</main>
+
+<dialog id="settings">
+  <h2>설정</h2>
+  <p class="hint">키는 이 브라우저에만 저장되고, 이 컴퓨터에서 돌아가는 스튜디오 서버로만 전송됩니다. 서버의 .env에 키를 넣었다면 비워 두세요.</p>
+  <label class="f" for="k-anthropic">Anthropic API 키</label><input type="password" id="k-anthropic" autocomplete="off">
+  <label class="f" for="k-cartesia">Cartesia API 키</label><input type="password" id="k-cartesia" autocomplete="off">
+  <div class="row">
+    <div class="fill"><label class="f" for="c-model">Cartesia 모델</label><input type="text" id="c-model" placeholder="서버 기본값"></div>
+    <div class="fill"><label class="f" for="c-version">Cartesia-Version</label><input type="text" id="c-version" placeholder="서버 기본값"></div>
+  </div>
+  <div class="row" style="margin-top:16px; justify-content:flex-end">
+    <button class="b" id="settings-close">닫기</button>
+    <button class="b primary" id="settings-save">저장</button>
+  </div>
+</dialog>
+<div id="drop">대본 JSON을 놓으세요</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="src/lib.js"></script>
+<script src="src/tones.js"></script>
+<script src="src/graphics.js"></script>
+<script src="src/backgrounds.js"></script>
+<script src="src/mascot.js"></script>
+<script src="src/scenes.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/prompt.js"></script>
+<script src="script.js"></script>
+<script src="src/engine.js"></script>
+<script src="src/qa.js"></script>
+<script src="src/studio.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "video-studio",
+  "private": true,
+  "type": "module",
+  "description": "톤 카드 기반 p5.js 설명 영상 스튜디오",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.131.0"
+  }
+}

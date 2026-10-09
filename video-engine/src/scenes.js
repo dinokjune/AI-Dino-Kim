@@ -25,7 +25,7 @@ SCENES.monitors = {
       const drop = (1 - easeOutBack(k)) * -400;
       const swing = Math.sin(t * 2 + i) * 0.015 * (1 - k * 0.5);
       push(); translate(cx, cy + drop); rotate(swing);
-      stroke(PAL.ink); strokeWeight(3);
+      stroke(LINE()); strokeWeight(3);
       line(-mw * 0.3, -mh / 2 - 12, -mw * 0.3, -cy - drop);
       line(mw * 0.3, -mh / 2 - 12, mw * 0.3, -cy - drop);
       fill('#2E2A28'); strokeWeight(6); rect(-mw / 2 - 12, -mh / 2 - 12, mw + 24, mh + 24, 14);
@@ -55,7 +55,7 @@ SCENES.title = {
         drawIcon(s.icon, 0, 0, 180, t);
       });
     }
-    textFont(FONT_HEAD); textSize(96);
+    useFont(FONT_HEAD); textSize(96);
     const tw = Math.min(1300, textWidth(stripMarks(s.text || '')) + 140);
     popAt(cx, cy, popK(t, 0.45), () => {
       card(0, 0, tw, 170);
@@ -74,10 +74,10 @@ SCENES.bubble = {
     const k = popK(t, 0.3);
     const bx = 1220, by = 400;
     popAt(bx, by, k, () => {
-      textFont(FONT_HEAD); textSize(68);
+      useFont(FONT_HEAD); textSize(68);
       const bw = Math.min(980, textWidth(str) + 140), bh = str.length > 16 ? 290 : 200;
       noStroke(); fill(0, 0, 0, 40); rect(-bw / 2 + 10, -bh / 2 + 12, bw, bh, 60);
-      fill(PAL.card); stroke(PAL.ink); strokeWeight(6);
+      fill(PAL.card); stroke(LINE()); strokeWeight(6);
       rect(-bw / 2, -bh / 2, bw, bh, 60);
       triangle(-bw / 2 + 120, bh / 2 - 4, -bw / 2 + 60, bh / 2 + 90, -bw / 2 + 200, bh / 2 - 4);
       noStroke(); fill(PAL.card); rect(-bw / 2 + 110, bh / 2 - 12, 100, 14);
@@ -101,7 +101,7 @@ SCENES.compare = {
     sides.forEach((side, i) => {
       const cx = i ? W * 0.72 : W * 0.28, k = popK(t, 0.3 + i * 0.35);
       popAt(cx, 520, k, () => {
-        stroke(PAL.ink); strokeWeight(8); fill(PAL.wood);
+        stroke(LINE()); strokeWeight(8); fill(PAL.wood);
         line(-170, 200, -230, 380); line(170, 200, 230, 380); line(0, 200, 0, 360);
         card(0, 0, 640, 440, { fill: PAL.paper });
         const mode = side.mode || (i ? 'smooth' : 'choppy');
@@ -109,7 +109,7 @@ SCENES.compare = {
         if (side.text) txt(side.text, 0, 185, 36, cardInk(), { font: FONT_BODY });
         if (side.label) {
           const tag = i ? PAL.green : PAL.red;
-          fill(side.tagColor || tag); stroke(PAL.ink); strokeWeight(5);
+          fill(side.tagColor || tag); stroke(LINE()); strokeWeight(5);
           rect(-120, -262, 240, 64, 32);
           txt(side.label, 0, -229, 38, '#fff');
         }
@@ -140,12 +140,12 @@ function easelScreen(x, y, w, h, mode, seed, t) {
     clipRect(x, y, w, h, 10, () => {
       noStroke();
       fill(lerpColor(color('#F2E6CF'), color('#CFE3F2'), (Math.sin(t) + 1) / 2)); rect(x, y, w, h);
-      fill(PAL.yellow); stroke(PAL.ink); strokeWeight(4);
+      fill(PAL.yellow); stroke(LINE()); strokeWeight(4);
       circle(x + w * p, y + h * 0.5 + Math.sin(p * TWO_PI) * h * 0.2, h * 0.28);
       noStroke(); fill(0, 0, 0, 30);
       for (let i = 0; i < 6; i++) circle(x + w * ((p - i * 0.04 + 1) % 1), y + h * 0.5 + Math.sin((p - i * 0.04) * TWO_PI) * h * 0.2, h * 0.28 * (1 - i * 0.14));
     });
-    noFill(); stroke(PAL.ink); strokeWeight(4); rect(x, y, w, h, 10);
+    noFill(); stroke(LINE()); strokeWeight(4); rect(x, y, w, h, 10);
   } else drawThumb(x, y, w, h, seed, t);
 }
 
@@ -174,10 +174,10 @@ SCENES.number = {
     }
     const k = popK(t, 0.45);
     popAt(1180, 430, k, () => {
-      textFont(FONT_HEAD); textSize(260);
+      useFont(FONT_HEAD); textSize(260);
       const vw = textWidth(raw + (s.suffix || ''));
       noStroke(); fill(PAL.yellow); rect(-vw / 2 - 50, -150, vw + 100, 290, 60);
-      stroke(PAL.ink); strokeWeight(6); noFill(); rect(-vw / 2 - 50, -150, vw + 100, 290, 60);
+      stroke(LINE()); strokeWeight(6); noFill(); rect(-vw / 2 - 50, -150, vw + 100, 290, 60);
       txt(shown + (s.suffix || ''), 0, 0, 260, PAL.ink);
     });
     if (s.label) withAlpha(inK(t, 1.0), () => txt(s.label, 1180, 680, 52, subInk(), { font: FONT_BODY }));
@@ -201,12 +201,12 @@ SCENES.funnel = {
       const cx = ox + i * gx, cy = 470;
       if (i > 0) {
         const ak = inK(t, ts[i] - 0.3, 0.4);
-        stroke(PAL.ink); strokeWeight(8);
+        stroke(LINE()); strokeWeight(8);
         const x0 = cx - gx + 170, x1 = lerp(x0, cx - 170, ak);
         if (ak > 0) { line(x0, cy, x1, cy); if (ak > 0.95) { line(x1, cy, x1 - 24, cy - 18); line(x1, cy, x1 - 24, cy + 18); } }
       }
       popAt(cx, cy, popK(t, ts[i]), () => {
-        fill(PAL.card); stroke(PAL.ink); strokeWeight(6); circle(0, 0, 300);
+        fill(PAL.card); stroke(LINE()); strokeWeight(6); circle(0, 0, 300);
         const dots = Math.max(1, Math.min(90, Math.round(st.dots ?? 90 / Math.pow(2.2, i))));
         noStroke();
         for (let j = 0; j < dots; j++) {
@@ -235,7 +235,7 @@ SCENES.typing = {
     const typeEnd = Math.min(d * 0.6, 0.8 + str.length * 0.045);
     popAt(W / 2 - 40, 470, popK(t, 0.2), () => {
       card(0, 0, 1180, 560, { fill: '#FFFFFF' });
-      fill(PAL.blue); stroke(PAL.ink); strokeWeight(5); circle(-490, -200, 84);
+      fill(PAL.blue); stroke(LINE()); strokeWeight(5); circle(-490, -200, 84);
       txt(s.name || 'prompt_master', -430, -215, 40, PAL.ink, { align: LEFT });
       txt(s.handle || '@someone · 1d', -430, -175, 28, '#7A7A7A', { align: LEFT, font: FONT_BODY });
       const n = Math.floor(clamp01((t - 0.8) / (typeEnd - 0.8)) * str.length);
@@ -266,7 +266,7 @@ SCENES.line = {
     const items = s.items || [], n = items.length, ts = revealTimes(n, d, 0.5, 1.2);
     const x0 = 140, x1 = W - 140, sag = 70;
     const ropeY = (x) => 230 + sag * (1 - Math.pow((2 * (x - x0)) / (x1 - x0) - 1, 2));
-    noFill(); stroke(PAL.ink); strokeWeight(5);
+    noFill(); stroke(LINE()); strokeWeight(5);
     beginShape(); for (let x = x0; x <= x1; x += 20) vertex(x, ropeY(x)); endShape();
     if (s.title) txt(s.title, W / 2, 140, 60, titleInk(), { outline: titleOutline(), ow: 12 });
     const cw = Math.min(300, 1500 / Math.max(1, n));
@@ -280,7 +280,7 @@ SCENES.line = {
       card(0, 190, cw - 30, 330, { r: 14 });
       drawIcon(it.icon || 'star', 0, 120, 110, t);
       txt(it.text || '', 0, 265, 40, cardInk(), { maxW: cw - 60, boxH: 140 });
-      fill(PAL.wood); stroke(PAL.ink); strokeWeight(4); rect(-12, -14, 24, 54, 6);
+      fill(PAL.wood); stroke(LINE()); strokeWeight(4); rect(-12, -14, 24, 54, 6);
       pop();
     });
   },
@@ -298,7 +298,7 @@ SCENES.cards = {
       const cx = ox + i * gx, cy = 540;
       popAt(cx, cy, popK(t, ts[i]), () => {
         noStroke(); fill(0, 0, 0, 40); rect(-cw / 2 + 12, -290 + 14, cw, 580, 10);
-        fill(PAL.wood); stroke(PAL.ink); strokeWeight(6); rect(-cw / 2, -290, cw, 580, 10);
+        fill(PAL.wood); stroke(LINE()); strokeWeight(6); rect(-cw / 2, -290, cw, 580, 10);
         fill(PAL.card); rect(-cw / 2 + 26, -264, cw - 52, 528, 6);
         if (it.icon) drawIcon(it.icon, 0, -150, 120, t);
         const head = it.num ? `${it.num}` : null;
@@ -334,28 +334,28 @@ SCENES.step = {
     // 좌상단 배지
     const bk = inK(t, 0.05, 0.4);
     push(); translate(lerp(-300, 0, bk), 0);
-    fill(PAL.yellow); stroke(PAL.ink); strokeWeight(6); rect(90, 110, 330, 100, 50);
+    fill(PAL.yellow); stroke(LINE()); strokeWeight(6); rect(90, 110, 330, 100, 50);
     txt(s.badge || `STEP ${n}`, 255, 160, 58, PAL.ink);
     pop();
     // 스테이션
     popAt(W / 2, 400 + Math.sin(t * 2) * 6, popK(t, 0.35), () => {
-      fill(PAL.wood); stroke(PAL.ink); strokeWeight(6); ellipse(0, 150, 420, 90);
+      fill(PAL.wood); stroke(LINE()); strokeWeight(6); ellipse(0, 150, 420, 90);
       noStroke(); fill(255, 255, 255, 130); circle(0, 0, 320);
       drawIcon(s.icon || 'gear', 0, 0, 230, t);
     });
     popAt(W / 2, 680, popK(t, 0.6), () => {
-      textFont(FONT_HEAD); textSize(70);
+      useFont(FONT_HEAD); textSize(70);
       const tw = Math.min(1200, textWidth(stripMarks(s.text || '')) + 120);
       card(0, 0, tw, 130);
       markedLine(s.text || '', 0, 4, 70, cardInk());
     });
     // 진행 바
     const by = 830, bw = 900, bx = W / 2 - bw / 2;
-    stroke(PAL.ink); strokeWeight(6); line(bx, by, bx + bw, by);
+    stroke(LINE()); strokeWeight(6); line(bx, by, bx + bw, by);
     for (let i = 0; i < total; i++) {
       const x = bx + (bw * i) / Math.max(1, total - 1), cur = i === n - 1, done = i < n - 1;
       const k = cur ? 1 + 0.15 * Math.sin(t * 5) : 1;
-      fill(done ? PAL.green : cur ? PAL.yellow : PAL.card); stroke(PAL.ink); strokeWeight(5);
+      fill(done ? PAL.green : cur ? PAL.yellow : PAL.card); stroke(LINE()); strokeWeight(5);
       circle(x, by, 46 * k);
       txt(String(i + 1), x, by + 1, 26, PAL.ink);
     }
@@ -421,7 +421,7 @@ SCENES.meters = {
         strokeCap(ROUND);
         const p = easeOutBack(clamp01((t - ts[i] - 0.3) / 1.0)) * (it.value ?? 0.5);
         const ang = PI + PI * clamp01(p);
-        stroke(PAL.ink); strokeWeight(10); line(0, 40, Math.cos(ang) * (R - 20), 40 + Math.sin(ang) * (R - 20));
+        stroke(LINE()); strokeWeight(10); line(0, 40, Math.cos(ang) * (R - 20), 40 + Math.sin(ang) * (R - 20));
         fill(PAL.ink); noStroke(); circle(0, 40, 30);
         txt(it.label || '', 0, 120, 44, cardInk());
         if (it.note) txt(it.note, 0, 175, 30, subInkCard(), { font: FONT_BODY });
@@ -447,13 +447,13 @@ SCENES.checklist = {
     const cx = W / 2 - 160, h = 200 + n * 110;
     popAt(cx, 140 + h / 2, popK(t, 0.15, 0.5), () => {
       card(0, 0, 1060, h, { r: 26 });
-      fill(PAL.wood); stroke(PAL.ink); strokeWeight(6); rect(-140, -h / 2 - 30, 280, 70, 18);
+      fill(PAL.wood); stroke(LINE()); strokeWeight(6); rect(-140, -h / 2 - 30, 280, 70, 18);
       txt(s.title || '체크리스트', 0, -h / 2 + 90, 60, cardInk());
       items.forEach((it, i) => {
         const y = -h / 2 + 200 + i * 110;
         const k = inK(t, ts[i] - 0.3, 0.3);
         withAlpha(0.35 + 0.65 * k, () => {
-          fill('#fff'); stroke(PAL.ink); strokeWeight(5); rect(-450, y - 30, 60, 60, 12);
+          fill('#fff'); stroke(LINE()); strokeWeight(5); rect(-450, y - 30, 60, 60, 12);
           txt(it, -360, y, 50, cardInk(), { align: LEFT, font: FONT_HEAD });
         });
         const ck = clamp01((t - ts[i]) / 0.25);
@@ -478,7 +478,7 @@ SCENES.endcard = {
       txt(s.url || META().url || '', 0, 70, 42, subInkCard(), { font: FONT_BODY });
     });
     popAt(W / 2, 560, popK(t, 0.8), () => {
-      fill(PAL.red); stroke(PAL.ink); strokeWeight(6); rect(-170, -50, 340, 100, 50);
+      fill(PAL.red); stroke(LINE()); strokeWeight(6); rect(-170, -50, 340, 100, 50);
       txt(s.button || '구독', 0, 2, 54, '#fff');
     });
   },
@@ -495,7 +495,7 @@ function subInkCard() { return PAL.cardText ? '#B8B8C8' : '#6A5E52'; }
 // *강조* 표시가 있는 한 줄을 중앙 정렬로 그린다
 function markedLine(str, x, y, size, col, hiCol) {
   const toks = parseMarked(str);
-  textFont(FONT_HEAD); textSize(size);
+  useFont(FONT_HEAD); textSize(size);
   const tw = toks.reduce((a, k) => a + textWidth(k.w), 0);
   let cx = x - tw / 2;
   textAlign(LEFT, CENTER); noStroke();

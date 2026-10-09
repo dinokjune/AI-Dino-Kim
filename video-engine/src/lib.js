@@ -61,7 +61,7 @@ function card(x, y, w, h, opt = {}) {
 }
 
 function txt(str, x, y, size, col, opt = {}) {
-  textFont(opt.font || FONT_HEAD);
+  useFont(opt.font || FONT_HEAD);
   textSize(size);
   textAlign(opt.align ?? CENTER, opt.valign ?? CENTER);
   textLeading(size * (opt.lead ?? 1.25));
@@ -97,4 +97,13 @@ function parseMarked(s) {
     });
   });
   return out;
+}
+
+// 선 색: 톤 카드가 stroke 를 지정하면 그 색, 아니면 잉크색
+const LINE = () => PAL.stroke || PAL.ink;
+// 굵기가 여러 개인 글꼴만 BOLD 로 그린다 (단일 굵기 글꼴에 가짜 굵게가 생기지 않게)
+const HEAD_BOLD = ['IBM Plex Sans KR', 'Noto Sans KR', 'Noto Serif KR', 'Gaegu', 'Nanum Gothic Coding'];
+function useFont(name) {
+  textFont(name);
+  textStyle(HEAD_BOLD.includes(name) && name === FONT_HEAD ? BOLD : NORMAL);
 }
