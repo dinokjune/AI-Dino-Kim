@@ -234,8 +234,8 @@ SCENES.typing = {
     const str = s.text || '';
     const typeEnd = Math.min(d * 0.6, 0.8 + str.length * 0.045);
     // 타이핑이 끝난 뒤에는 화면이 멈추지 않도록 게시물로 천천히 다가간다
-    const push = 1 + 0.08 * easeInOut(clamp01((t - typeEnd - 0.4) / Math.max(1, d - typeEnd - 0.4)));
-    popAt(W / 2 - 40, 470, popK(t, 0.2) * push, () => {
+    const zoomIn = 1 + 0.08 * easeInOut(clamp01((t - typeEnd - 0.4) / Math.max(1, d - typeEnd - 0.4)));
+    popAt(W / 2 - 40, 470, popK(t, 0.2) * zoomIn, () => {
       card(0, 0, 1180, 560, { fill: '#FFFFFF' });
       fill(PAL.blue); stroke(LINE()); strokeWeight(5); circle(-490, -200, 84);
       txt(s.name || 'prompt_master', -430, -215, 40, PAL.ink, { align: LEFT });
@@ -485,7 +485,13 @@ SCENES.endcard = {
       txt(s.channel || META().channel || '채널 이름', 0, -30, 100, cardInk());
       txt(s.url || META().url || '', 0, 70, 42, subInkCard(), { font: FONT_BODY });
     });
-    popAt(W / 2, 560, popK(t, 0.8), () => {
+    // 구독 버튼에서 파동이 퍼진다 (마지막 장면이 멈춰 보이지 않게, 시선이 버튼으로 가게)
+    if (t > 1.2) for (let k = 0; k < 2; k++) {
+      const ph = ((t - 1.2) / 1.4 + k * 0.5) % 1;
+      noFill(); stroke(PAL.red); strokeWeight(6 * (1 - ph));
+      withAlpha(1 - ph, () => { rectMode(CENTER); rect(W / 2, 560, 340 + ph * 160, 100 + ph * 80, 60); rectMode(CORNER); });
+    }
+    popAt(W / 2, 560, popK(t, 0.8) * (1 + 0.04 * Math.sin(t * 5)), () => {
       fill(PAL.red); stroke(LINE()); strokeWeight(6); rect(-170, -50, 340, 100, 50);
       txt(s.button || '구독', 0, 2, 54, '#fff');
     });

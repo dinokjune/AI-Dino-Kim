@@ -61,6 +61,8 @@ function bgSpace(wall) {
   const g = drawingContext.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, wall); g.addColorStop(1, '#000000');
   drawingContext.fillStyle = g; drawingContext.fillRect(0, 0, W, H);
+  // Three.js가 있으면 진짜 3D 별 공간, 없으면 아래 2D 별·격자
+  if (typeof t3Ready === 'function' && t3Ready() && bgStars3D()) return;
   if (!STARS) STARS = Array.from({ length: 160 }, (_, i) => [rnd(i) * W, rnd(i + 99) * FLOOR_Y, 0.3 + rnd(i + 7) * 1.7]);
   noStroke();
   STARS.forEach(([x, y, z]) => { fill(255, 255, 255, 60 + z * 90); circle((x - NOW * z * 6 + W * 10) % W, y, z * 2.2); });

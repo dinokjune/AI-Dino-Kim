@@ -183,6 +183,7 @@ function serveStatic(req, res) {
   let rel = decodeURIComponent(url.pathname);
   if (rel === '/') rel = '/studio.html';
   if (rel === '/vendor/p5.min.js') rel = '/node_modules/p5/lib/p5.min.js';
+  else if (rel === '/vendor/three.module.min.js') rel = '/node_modules/three/build/three.module.min.js';
   else if (rel.startsWith('/node_modules')) { res.writeHead(403); return res.end(); }
   const file = path.normalize(path.join(ROOT, rel));
   if (!file.startsWith(ROOT + path.sep) || rel.includes('/.')) { res.writeHead(403); return res.end(); }

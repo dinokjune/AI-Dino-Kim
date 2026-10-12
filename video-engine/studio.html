@@ -271,6 +271,11 @@
 </dialog>
 <div id="drop">대본 JSON을 놓으세요</div>
 
+<!-- Three.js (3D 장면): 서버로 열면 내장 파일, 파일로 열면 CDN -->
+<script type="module">
+  try { window.THREE = await import('./vendor/three.module.min.js'); }
+  catch (e) { try { window.THREE = await import('https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js'); } catch (e2) { console.warn('Three.js를 불러오지 못해 3D 장면은 2D로 대신합니다'); } }
+</script>
 <!-- 서버로 열면 내장 p5(node_modules), 파일로 열면 CDN -->
 <script src="vendor/p5.min.js"></script>
 <script>window.p5 || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"><\/script>')</script>
@@ -281,6 +286,7 @@
 <script src="src/backgrounds.js"></script>
 <script src="src/mascot.js"></script>
 <script src="src/scenes.js"></script>
+<script src="src/three3d.js"></script>
 <script src="src/audio.js"></script>
 <script src="src/prompt.js"></script>
 <script src="script.js"></script>

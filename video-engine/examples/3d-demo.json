@@ -1,0 +1,12 @@
+{
+  "meta": { "title": "3D 장면 견본", "channel": "AI활용연구소", "url": "youtube.com/@your-channel", "tone": "stage", "topic": "3D 장면 견본" },
+  "scenes": [
+    { "beat": "오프닝", "type": "three", "model": "tunnel", "text": "*3D*로 들어갑니다", "wall": "dark", "say": "오늘은 화면 속으로 *한 걸음 더* 들어가 볼게요." },
+    { "beat": "세계", "type": "three", "model": "globe", "points": 6, "text": "어디서든 연결", "sub": "거점 6곳이 이어집니다", "wall": "purple", "say": "전 세계 *6곳*의 거점이 하나로 이어집니다." },
+    { "beat": "데이터", "type": "three", "model": "bars", "values": [{ "label": "1월", "value": 12 }, { "label": "2월", "value": 18 }, { "label": "3월", "value": 27 }, { "label": "4월", "value": 35 }], "suffix": "편", "text": "월별 영상 수", "wall": "olive", "say": "1월 *12편*에서 2월 18편, 3월 27편, 4월에는 *35편*까지 늘었어요." },
+    { "beat": "핵심", "type": "three", "model": "core", "text": "AI의 *핵심*", "sub": "규칙 · 예시 · 기준", "wall": "dark", "say": "그 중심에는 규칙, 예시, 기준이라는 *세 가지*가 있습니다." },
+    { "beat": "전환", "type": "three", "model": "cubes", "text": "조각을 맞추면", "wall": "green", "say": "작은 조각들을 맞추면 하나의 영상이 됩니다." },
+    { "beat": "인사", "type": "three", "model": "mascot", "text": "안녕하세요!", "sub": "3D 디노입니다", "wall": "cream", "say": "저는 *3D 디노*예요. 다음 영상에서 만나요." },
+    { "beat": "마무리", "type": "endcard", "dur": 4, "say": "지금까지 AI활용연구소였습니다." }
+  ]
+}

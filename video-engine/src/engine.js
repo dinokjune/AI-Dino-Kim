@@ -61,6 +61,7 @@ function loadScript(obj) {
   SCRIPT = obj;
   setTone(META().tone || 'stage');
   applyFontOverride(META().fonts);
+  if (typeof t3Reset === 'function' && window.THREE) t3Reset();
   if (document.fonts) { document.fonts.load(`64px "${FONT_HEAD}"`); document.fonts.load(`40px "${FONT_BODY}"`); }
   let acc = 0;
   TL = SCRIPT.scenes.map((s, i) => {

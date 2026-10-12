@@ -18,6 +18,7 @@ function onScreenStrings(s) {
   (s.steps || []).forEach((st, i) => { add(st.value, `steps[${i}].value`); add(st.label, `steps[${i}].label`); });
   ['left', 'right'].forEach((k) => s[k] && ['label', 'text'].forEach((f) => add(s[k][f], `${k}.${f}`)));
   (s.labels || []).forEach((l, i) => add(l, `labels[${i}]`));
+  (s.values || []).forEach((v, i) => { add(String(v.value) + (s.suffix || ''), `values[${i}].value`); add(v.label, `values[${i}].label`); });
   return out;
 }
 
@@ -97,7 +98,8 @@ async function runQA({ source = '' } = {}) {
     lumas.push(lumaOf(px));
     if (prev) {
       const d = diffOf(prev.small, px);
-      diffs.push(d);
+      // 3D 장면은 일부러 크게 움직이므로 톤의 '움직임 양' 평균에서는 뺀다 (정지 판정은 그대로)
+      if (TL[sceneAt(T)].s.type !== 'three') diffs.push(d);
       if (changedRatio(prev.fine, fr.fine) < 0.002) { still += step; if (still >= 1.0 && !flagged) { stillAt.push(T - still); flagged = true; } }
       else { still = 0; flagged = false; }
     }
@@ -107,9 +109,13 @@ async function runQA({ source = '' } = {}) {
   const L = lumas.reduce((a, b) => a + b, 0) / lumas.length;
   if (L < tg.brightness[0] || L > tg.brightness[1]) R('warn', '톤 이탈: 밝기', `평균 밝기 ${L.toFixed(0)} / 목표 ${tg.brightness[0]}~${tg.brightness[1]}. 장면 wall 색이 톤과 맞는지 보세요.`);
   else R('pass', '밝기', `평균 ${L.toFixed(0)} / 목표 ${tg.brightness[0]}~${tg.brightness[1]}`);
-  const M = diffs.reduce((a, b) => a + b, 0) / Math.max(1, diffs.length);
-  if (M < tg.motion[0] || M > tg.motion[1]) R('warn', '톤 이탈: 움직임 양', `평균 변화량 ${M.toFixed(2)} / 목표 ${tg.motion[0]}~${tg.motion[1]}`);
-  else R('pass', '움직임 양', `평균 변화량 ${M.toFixed(2)} / 목표 ${tg.motion[0]}~${tg.motion[1]}`);
+  // 3D 장면을 뺀 2D 구간이 너무 짧으면 평균이 엔드카드 같은 한두 장면에 휘둘리므로 재지 않는다
+  if (diffs.length < 12) R('info', '움직임 양', '대부분이 3D 장면이라 2D 기준의 움직임 양은 재지 않았습니다.');
+  else {
+    const M = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+    if (M < tg.motion[0] || M > tg.motion[1]) R('warn', '톤 이탈: 움직임 양', `평균 변화량 ${M.toFixed(2)} / 목표 ${tg.motion[0]}~${tg.motion[1]}`);
+    else R('pass', '움직임 양', `평균 변화량 ${M.toFixed(2)} / 목표 ${tg.motion[0]}~${tg.motion[1]}`);
+  }
   if (stillAt.length) R('warn', '1초 넘게 멈춘 화면', stillAt.map((t) => `${t.toFixed(1)}초 부근`).join(', ') + ' – 작은 움직임을 넣거나 장면을 줄이세요.');
   else R('pass', '정지 화면 없음', '1초 넘게 아무것도 움직이지 않는 구간이 없습니다.');
 

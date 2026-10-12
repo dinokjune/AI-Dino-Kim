@@ -13,7 +13,8 @@ async function getBrowser() {
       let pw;
       try { pw = await import('playwright'); }
       catch { throw new Error('playwright가 설치되어 있지 않습니다. video-engine 폴더에서 "npm install" 후 "npx playwright install chromium"을 실행하세요.'); }
-      return pw.chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+      // 3D(WebGL)를 GPU 없는 환경에서도 그리도록 소프트웨어 렌더러를 허용한다
+      return pw.chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
     })();
     browserPromise.catch(() => { browserPromise = null; });
   }
@@ -38,6 +39,7 @@ export async function withStudioPage(baseUrl, settings, fn) {
   try {
     await page.goto(`${baseUrl}/studio.html?headless=1`, { waitUntil: 'load' });
     await page.waitForFunction(() => typeof renderAt === 'function' && typeof TL !== 'undefined' && TL.length > 0, null, { timeout: 30000 });
+    await page.waitForFunction(() => !!window.THREE, null, { timeout: 15000 }).catch(() => {}); // 3D 모듈 (없으면 2D로 대신)
     return await fn(page);
   } catch (e) {
     if (errors.length) e.message += ` (페이지 오류: ${errors.slice(0, 3).join(' / ')})`;

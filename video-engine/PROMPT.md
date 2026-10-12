@@ -53,6 +53,7 @@ JSON 외의 설명은 쓰지 마라.
 - grid: cols, rows, flags [경고 표시할 칸 번호], title
 - meters: title, items [{label, value(0~1), target([최소, 최대]), note}] 2~3개
 - endcard: channel, url, button
+- three: 3D 장면. model(globe|bars|cubes|core|tunnel|mascot), text, sub, values(bars용 [{label, value}]), suffix, points(globe용)
 아이콘: check x key clock bulb folder eye ruler palette speaker camera chef star gear doc search warn film robot chart heart mic stamp target book calendar
 효과음(sfx name): pop tick check whoosh ding chime notify stamp snap curtain boing paper scan sweep buzz riser
 

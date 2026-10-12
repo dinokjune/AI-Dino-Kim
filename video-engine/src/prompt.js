@@ -57,6 +57,10 @@ const SCENE_CATALOG = `공통 속성: beat(이 장면의 역할), type, say(내�
 - grid: cols, rows, flags [경고 칸 번호], title
 - meters: title, items [{label, value(0~1), target([최소, 최대]), note}] 2~3개
 - endcard: channel, url, button
+- three: 3D 장면 (Three.js). model(globe|bars|cubes|core|tunnel|mascot), text(선택, 12자 이내), sub
+  · globe: 지구·연결·세계 이야기, points(거점 수 2~8) · bars: 숫자 비교, values [{label, value}] 2~6개, suffix
+  · cubes: 추상적 도입·전환 · core: AI·기술의 핵심 · tunnel: 오프닝 훅 · mascot: 3D 디노가 인사 (마스코트 있는 톤에서만)
+  · 한 영상에 1~3번, 강조가 필요한 곳에만 쓴다. 시네마틱 3D 톤에서는 조금 더 자주 써도 된다
 아이콘: check x key clock bulb folder eye ruler palette speaker camera chef star gear doc search warn film robot chart heart mic stamp target book calendar
 효과음: pop tick check whoosh ding chime notify stamp snap curtain boing paper scan sweep buzz riser click glitch boom`;
 
