@@ -9,15 +9,15 @@ const settings = () => store.get('settings', {});
 let SERVER = null; // /api/status 결과, 없으면 오프라인
 
 // ── 서버 호출 ──
-// 대본 엔진: API(종량제) 또는 내 구독 CLI
-const LLM_NAMES = { 'claude-api': 'Claude API (종량제)', 'claude-cli': 'Claude Code (내 Claude 구독)', codex: 'Codex (내 ChatGPT 구독)', gemini: 'Gemini CLI (내 Google 구독)' };
+// 대본 엔진: 내 구독 CLI 우선, 종량제 API는 마지막 (기본값은 서버가 설치된 CLI 중에서 고른다)
+const LLM_NAMES = { 'claude-cli': 'Claude Code (내 Claude 구독)', codex: 'Codex (내 ChatGPT 구독)', gemini: 'Gemini CLI (내 Google 구독)', 'claude-api': 'Claude API (종량제)' };
 const LLM_NOTES = {
   'claude-api': 'Anthropic API 키로 실행 · 쓴 토큰만큼 요금 (claude-opus-5-5)',
   'claude-cli': 'Claude Code에 로그인한 내 구독으로 실행 · 추가 요금 없음 (구독 사용 한도 안에서)',
   codex: 'ChatGPT 계정으로 로그인한 Codex CLI로 실행 · 추가 요금 없음 (구독 사용 한도 안에서)',
   gemini: 'Google 계정으로 로그인한 Gemini CLI로 실행 · 추가 요금 없음 (구독·무료 한도 안에서)',
 };
-function llmEngine() { return (settings().llmEngine) || (SERVER && SERVER.llmDefault) || 'claude-api'; }
+function llmEngine() { return (settings().llmEngine) || (SERVER && SERVER.llmDefault) || 'claude-cli'; }
 function llmReady(e) {
   if (!SERVER) return false;
   if (e === 'claude-api') return !!(SERVER.claudeKey || settings().anthropicKey);

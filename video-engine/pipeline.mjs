@@ -27,7 +27,7 @@ if (!args.topic && !args.topics) {
   console.log(`사용법:
   node pipeline.mjs --topic "주제" [--tone stage] [--length standard|shorts|long] [--voice <Cartesia 목소리 ID>]
                     [--source 참고자료.txt] [--channel "채널 이름"] [--url "채널 주소"] [--no-voice] [--upload]
-                    [--llm claude-api|claude-cli|codex|gemini]   (대본 엔진: API 또는 내 구독 CLI)
+                    [--llm claude-cli|codex|gemini|claude-api]   (대본 엔진: 생략하면 설치된 구독 CLI 우선, 없을 때만 API)
                     [--tts cartesia|elevenlabs|openai|google|clova] [--voice <목소리 ID>] [--speed 1.0]
                     [--font-head "글꼴"] [--font-caption "글꼴"] [--font-body "글꼴"] [--font-number "글꼴"]
                     (글꼴: Google Fonts 이름, 설치된 글꼴 이름, 다운로드·fonts 폴더의 파일 이름)

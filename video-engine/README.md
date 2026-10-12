@@ -18,18 +18,18 @@ MP4를 만들려면 **ffmpeg**가 필요합니다(윈도우: `winget install Gya
 
 키를 `.env` 대신 스튜디오의 ⚙ 설정에 넣어도 됩니다(브라우저에만 저장, 로컬 서버로만 전송). 서버 없이 `studio.html`을 파일로 열면 **오프라인 모드**로 동작합니다. 이때는 "프롬프트 복사"로 Claude 대화창에서 대본을 받아 "JSON 붙여넣기"로 넣고, 음성 대신 브라우저 TTS로 미리 듣습니다.
 
-## 대본을 쓰는 AI: API 또는 내 구독
+## 대본을 쓰는 AI: 내 구독 CLI 우선
 
-2번 단계의 "대본을 쓸 AI"에서 고릅니다. 구독 엔진은 내가 이미 로그인해 둔 CLI를 불러 쓰므로 **추가 요금이 없고**(구독 사용 한도 안에서), 비용 표에는 "구독"으로 표시됩니다.
+2번 단계의 "대본을 쓸 AI"에서 고릅니다. **따로 고르지 않으면 설치된 구독 CLI를 Claude Code → Codex → Gemini 순으로 찾아 쓰고, 하나도 없을 때만 종량제 API를 씁니다.** 구독 엔진은 내가 이미 로그인해 둔 CLI를 불러 쓰므로 **추가 요금이 없고**(구독 사용 한도 안에서), 비용 표에는 "구독"으로 표시됩니다.
 
 | 선택 | 쓰는 것 | 준비 |
 |---|---|---|
-| Claude API (종량제) | Anthropic API 키 · claude-opus-5-5 | `.env`의 `ANTHROPIC_API_KEY` |
 | Claude Code (내 Claude 구독) | `claude -p` | Claude Code 설치 후 `claude` 실행해 로그인 |
 | Codex (내 ChatGPT 구독) | `codex exec` (읽기 전용 모드) | `npm i -g @openai/codex` 후 `codex login` → "Sign in with ChatGPT" |
 | Gemini CLI (내 Google 구독) | `gemini -p` | `npm i -g @google/gemini-cli` 후 `gemini` 실행해 Google 계정으로 로그인 |
+| Claude API (종량제, 마지막 선택지) | Anthropic API 키 · claude-opus-5-5 | `.env`의 `ANTHROPIC_API_KEY` |
 
-CLI는 빈 임시 폴더에서 실행되고 프롬프트는 표준 입력으로 넘어가서 내 파일을 건드리지 않습니다. 설치를 마친 뒤에는 서버를 다시 켜야 목록에 "설치됨"으로 잡힙니다. 기본값은 `.env`의 `LLM_ENGINE=codex`처럼 정할 수 있고, 예약 실행에서는 `--llm codex`를 씁니다.
+CLI는 빈 임시 폴더에서 실행되고 프롬프트는 표준 입력으로 넘어가서 내 파일을 건드리지 않습니다. 설치를 마친 뒤에는 서버를 다시 켜야 목록에 "설치됨"으로 잡힙니다. 하나로 고정하려면 `.env`에 `LLM_ENGINE=codex`처럼 쓰고, 예약 실행에서는 `--llm codex`를 씁니다.
 
 **구독으로 안 되는 것**: 음성(TTS)은 구독에 포함되지 않습니다. ChatGPT 구독에는 API 사용이 들어 있지 않아(OpenAI 안내) OpenAI 음성은 API 키가 있어야 하고, Codex·Gemini CLI는 음성을 만들지 못합니다. **Google 음성은 API 키 대신 gcloud CLI 로그인으로 쓸 수 있습니다** – `gcloud auth login` 후 `gcloud config set project <프로젝트 ID>`(Text-to-Speech API 사용 설정)만 하면 키 없이 동작합니다. 이때 요금은 구독이 아니라 그 Google Cloud 프로젝트 기준이며, 월 100만 자 무료 구간(Neural2·WaveNet 기준)이 있습니다.
 

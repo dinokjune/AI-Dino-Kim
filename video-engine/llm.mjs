@@ -89,6 +89,13 @@ export async function runCli(engine, prompt, { system, model } = {}) {
 }
 
 // 설치 여부 (서버 시작 때 한 번 확인)
+// 기본 엔진: LLM_ENGINE 이 있으면 그것, 없으면 설치된 구독 CLI를 이 순서로 고르고, 하나도 없을 때만 종량제 API
+export const CLI_ORDER = ['claude-cli', 'codex', 'gemini'];
+export function pickDefaultEngine(status) {
+  if (ENGINES[process.env.LLM_ENGINE]) return process.env.LLM_ENGINE;
+  return CLI_ORDER.find((k) => status[k] && status[k].installed) || 'claude-api';
+}
+
 export function detectEngines() {
   const out = {};
   for (const [k, E] of Object.entries(ENGINES)) {

@@ -14,7 +14,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { scanFonts, serveFont, saveFont, scanSystemFonts } from './fonts.mjs';
 import { claudeCost, createLedger, loadJobs, saveJobs } from './usage.mjs';
 import { PROVIDERS, providerKey, providerStatus, gcloudStatus } from './tts.mjs';
-import { ENGINES, runCli, detectEngines } from './llm.mjs';
+import { ENGINES, runCli, detectEngines, pickDefaultEngine } from './llm.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 loadDotEnv(path.join(ROOT, '.env'));
@@ -59,7 +59,7 @@ async function handleClaude(req, res) {
   const { prompt, system, maxTokens, engine: reqEngine } = await readBody(req);
   // 엔진 이름이 잘못 오면 종량제 API로 조용히 넘어가 요금이 나가지 않게 오류로 막는다
   if (reqEngine && !ENGINES[reqEngine]) return send(res, 400, { error: `알 수 없는 대본 엔진: ${String(reqEngine).slice(0, 40)}` });
-  const engine = reqEngine || (ENGINES[process.env.LLM_ENGINE] ? process.env.LLM_ENGINE : 'claude-api');
+  const engine = reqEngine || defaultEngine();
   if (engine !== 'claude-api') {
     // 내 구독 CLI로 대본 쓰기: 추가 요금 없음 (구독 한도 안에서)
     if (!prompt) return send(res, 400, { error: 'prompt가 비어 있습니다' });
@@ -152,6 +152,9 @@ function serveStatic(req, res) {
 // ── 작업 대기열: 한 번에 하나씩 헤드리스 브라우저로 처리 ──
 const JOBS = loadJobs(OUT);
 let ENGINE_STATUS = null;
+const engineStatus = () => ENGINE_STATUS || (ENGINE_STATUS = detectEngines());
+// 대본 엔진은 내 구독 CLI 우선 (llm.mjs pickDefaultEngine)
+const defaultEngine = () => pickDefaultEngine(engineStatus());
 let running = false;
 
 function publicJob(j) {
@@ -273,8 +276,8 @@ const server = http.createServer(async (req, res) => {
         server: true, claudeModel: CLAUDE_MODEL, cartesiaModel: CARTESIA_MODEL, cartesiaVersion: CARTESIA_VERSION,
         claudeKey: !!process.env.ANTHROPIC_API_KEY, cartesiaKey: !!process.env.CARTESIA_API_KEY, voiceId: !!process.env.CARTESIA_VOICE_ID,
         tts: providerStatus(),
-        llm: ENGINE_STATUS || (ENGINE_STATUS = detectEngines()),
-        llmDefault: ENGINES[process.env.LLM_ENGINE] ? process.env.LLM_ENGINE : 'claude-api',
+        llm: engineStatus(),
+        llmDefault: defaultEngine(),
         gcloud: await gcloudStatus(),
         youtube: !!(process.env.YT_CLIENT_ID && process.env.YT_CLIENT_SECRET && process.env.YT_REFRESH_TOKEN),
       });
