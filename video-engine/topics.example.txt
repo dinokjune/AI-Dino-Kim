@@ -1,0 +1,3 @@
+# 한 줄에 주제 하나. pipeline.mjs --topics topics.example.txt 로 앞에서부터 처리합니다.
+회의록 5분 만에 정리하기
+초보자를 위한 프롬프트 3원칙

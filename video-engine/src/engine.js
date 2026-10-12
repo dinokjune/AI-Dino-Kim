@@ -4,6 +4,7 @@ let SCRIPT = null, TL = [], TOTAL = 0, EVENTS = [], evIdx = 0;
 let curT = 0, playing = false, ctxStart = 0, tStart = 0, lastSceneIdx = -1;
 let recorder = null, recChunks = [];
 const META = () => (SCRIPT && SCRIPT.meta) || {};
+const HEADLESS = /[?&]headless=1/.test(location.search);
 
 // 장면별 내레이션: key(대사 해시) → { buffer, duration, words:[{w,start,end}], wav(base64) }
 const VOICE = {};
@@ -319,21 +320,9 @@ function record() {
 
 // ── 컨택트 시트: 영상 전체를 24장으로 펼쳐 1분 안에 눈으로 검수 ──
 function contactSheet() {
-  const cols = 6, rows = 4, tw = 320, th = 180, pad = 8;
-  const sheet = createGraphics(cols * (tw + pad) + pad, rows * (th + pad + 26) + pad);
-  sheet.background('#1F2A30');
-  sheet.textFont('Noto Sans KR'); sheet.textSize(16); sheet.fill(255);
-  const was = curT;
-  for (let i = 0; i < cols * rows; i++) {
-    const T = ((i + 0.5) * TOTAL) / (cols * rows);
-    renderAt(T);
-    const x = pad + (i % cols) * (tw + pad), y = pad + Math.floor(i / cols) * (th + pad + 26);
-    sheet.drawingContext.drawImage(drawingContext.canvas, x, y, tw, th);
-    sheet.text(`#${sceneAt(T) + 1} ${TL[sceneAt(T)].s.type} · ${T.toFixed(1)}s`, x + 4, y + th + 18);
-  }
+  const sheet = buildContactSheet();
   saveCanvas(sheet, (META().title || 'video') + '-contact-sheet', 'png');
   sheet.remove();
-  curT = was;
 }
 
 // ── p5 ──
@@ -345,6 +334,7 @@ function setup() {
   buildGrain();
   loadScript(window.SCRIPT_DATA);
   UI.init();
+  if (HEADLESS) noLoop();
 }
 
 function draw() {

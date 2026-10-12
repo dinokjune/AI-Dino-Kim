@@ -42,7 +42,7 @@ JSON 외의 설명은 쓰지 마라.
 - monitors: count(3~8), labels(선택)
 - bubble: text(말풍선 문장), mood(happy|think|sweat|wow|point|wave|sad)
 - compare: left/right {label, mode(choppy|smooth|still), seed(0~5), text}, verdict(left|right|none)
-- number: value(문자열, 예 "1,938" "1.7"), suffix, icon, label, countUp(false면 처음부터 최종값)
+- number: value(문자열, 예 "1,938" "1.7"), suffix, icon, label, countUp(true면 0부터 올라감 – 중간값이 화면에 찍히니 꼭 필요할 때만)
 - funnel: steps [{value, label}] 2~4개
 - title: text, sub, icon
 - typing: name, handle, text, likes

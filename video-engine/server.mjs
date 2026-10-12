@@ -2,11 +2,14 @@
 // - 정적 파일 제공 (studio.html 등)
 // - POST /api/claude : 대본·주제 생성 (Claude API)
 // - POST /api/tts    : 내레이션 생성 (Cartesia, 단어 타임스탬프 포함)
+// - POST /api/render : 스튜디오 대본(+음성)을 MP4로 렌더 (헤드리스, 작업 대기열)
+// - POST /api/jobs   : 주제 여러 개를 자동 제작 (대본 → 음성 → 검수 → MP4 → 선택: 유튜브 비공개 업로드)
+// - GET  /api/jobs   : 작업 상태,  /out/... : 결과 파일
 // API 키는 환경 변수(.env 권장) 또는 스튜디오 설정 화면에서 보낸 헤더로 받는다. 기본은 127.0.0.1에서만 열린다.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -19,9 +22,11 @@ const CARTESIA_URL = process.env.CARTESIA_BASE_URL || 'https://api.cartesia.ai';
 const CARTESIA_VERSION = process.env.CARTESIA_VERSION || '2024-11-13';
 const CARTESIA_MODEL = process.env.CARTESIA_MODEL || 'sonic-3';
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.md': 'text/markdown; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.wav': 'audio/wav' };
+const OUT = path.join(ROOT, 'out');
 
-function loadDotEnv(file) {
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.md': 'text/markdown; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.wav': 'audio/wav', '.mp4': 'video/mp4' };
+
+export function loadDotEnv(file) {
   if (!fs.existsSync(file)) return;
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
     const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
@@ -167,23 +172,141 @@ function serveStatic(req, res) {
   const url = new URL(req.url, 'http://x');
   let rel = decodeURIComponent(url.pathname);
   if (rel === '/') rel = '/studio.html';
+  if (rel === '/vendor/p5.min.js') rel = '/node_modules/p5/lib/p5.min.js';
+  else if (rel.startsWith('/node_modules')) { res.writeHead(403); return res.end(); }
   const file = path.normalize(path.join(ROOT, rel));
-  if (!file.startsWith(ROOT) || rel.includes('/.') || rel.startsWith('/node_modules')) { res.writeHead(403); return res.end(); }
-  fs.readFile(file, (err, data) => {
-    if (err) { res.writeHead(404); return res.end('not found'); }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
-    res.end(data);
+  if (!file.startsWith(ROOT + path.sep) || rel.includes('/.')) { res.writeHead(403); return res.end(); }
+  fs.stat(file, (err, st) => {
+    if (err || !st.isFile()) { res.writeHead(404); return res.end('not found'); }
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Content-Length': st.size });
+    fs.createReadStream(file).pipe(res);
   });
+}
+
+// ── 작업 대기열: 한 번에 하나씩 헤드리스 브라우저로 처리 ──
+const JOBS = [];
+let running = false;
+
+function publicJob(j) {
+  const { settings, payload, ...rest } = j;
+  return rest;
+}
+
+function keysFrom(req, body) {
+  return {
+    anthropicKey: req.headers['x-anthropic-key'] || '', cartesiaKey: req.headers['x-cartesia-key'] || '',
+    cartesiaModel: body.cartesiaModel || '', cartesiaVersion: body.cartesiaVersion || '',
+  };
+}
+
+async function notify(job) {
+  const url = process.env.NOTIFY_WEBHOOK_URL;
+  if (!url) return;
+  const text = job.status === 'done'
+    ? `영상 완성: ${job.title}\n${job.youtube ? job.youtube.url + ' (비공개)' : job.files.mp4}\n검수: ${job.qaSummary || ''}`
+    : `영상 제작 실패: ${job.title}\n${job.error}`;
+  try { await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, content: text, job: publicJob(job) }) }); }
+  catch (e) { console.warn('알림 전송 실패:', e.message); }
+}
+
+async function runQueue(baseUrl) {
+  if (running) return;
+  running = true;
+  const produce = await import('./produce.mjs');
+  try {
+    let job;
+    while ((job = JOBS.find((j) => j.status === 'queued'))) {
+      job.status = 'running'; job.startedAt = Date.now();
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+      const outDir = path.join(OUT, `${stamp}-${produce.slugify(job.title)}`);
+      const onProgress = (step, p) => { job.step = step; job.progress = Math.round(p * 100); };
+      try {
+        const res = job.kind === 'render'
+          ? await produce.renderScript({ baseUrl, settings: job.settings, script: job.payload.script, voices: job.payload.voices, outDir, onProgress })
+          : await produce.produceTopic({ baseUrl, settings: job.settings, job: job.payload, outDir, onProgress });
+        const rel = (f) => '/out/' + path.relative(OUT, f).split(path.sep).join('/');
+        job.files = { mp4: rel(res.mp4), sheet: rel(res.sheet), dir: rel(outDir) };
+        if (res.qa) {
+          const bad = res.qa.filter((r) => r.level === 'fail').length, warn = res.qa.filter((r) => r.level === 'warn').length;
+          job.qaSummary = `실패 ${bad} · 경고 ${warn}`;
+          job.qa = res.qa;
+        }
+        job.log = res.log || [];
+        job.duration = res.duration;
+        // 숫자 검문에 걸린 영상은 업로드하지 않는다
+        const failed = res.qa && res.qa.some((r) => r.level === 'fail');
+        if (job.upload && !failed) {
+          job.step = 'upload';
+          const { uploadVideo } = await import('./youtube.mjs');
+          job.youtube = await uploadVideo(res.mp4, res.meta);
+        } else if (job.upload && failed) job.log.push('검수 실패 항목이 있어 업로드를 건너뛰었습니다');
+        job.status = 'done';
+      } catch (e) {
+        job.status = 'error'; job.error = String(e.message || e);
+      }
+      job.step = null; job.finishedAt = Date.now();
+      delete job.payload; delete job.settings;
+      notify(job);
+    }
+  } finally {
+    running = false;
+    await produce.closeBrowser().catch(() => {});
+  }
+}
+
+let BASE_URL = '';
+async function handleRender(req, res) {
+  const body = await readBody(req, 300_000_000);
+  if (!body.script) return send(res, 400, { error: 'script가 없습니다' });
+  const job = { id: 'j' + Date.now().toString(36), kind: 'render', title: (body.script.meta && (body.script.meta.title || body.script.meta.topic)) || '영상', status: 'queued', createdAt: Date.now(), settings: keysFrom(req, body), payload: { script: body.script, voices: body.voices || {} } };
+  JOBS.push(job); runQueue(BASE_URL);
+  send(res, 200, publicJob(job));
+}
+
+async function handleJobs(req, res) {
+  const body = await readBody(req);
+  const topics = (body.topics || []).map((t) => String(t).trim()).filter(Boolean).slice(0, 30);
+  if (!topics.length) return send(res, 400, { error: '주제를 한 줄에 하나씩 넣어 주세요' });
+  if (body.upload) {
+    const { youtubeReady } = await import('./youtube.mjs');
+    if (!youtubeReady()) return send(res, 400, { error: '유튜브 업로드 설정이 없습니다. README의 "유튜브 업로드 준비"를 먼저 해 주세요.' });
+  }
+  const created = topics.map((topic, i) => ({
+    id: 'j' + (Date.now() + i).toString(36), kind: 'auto', title: topic, status: 'queued', createdAt: Date.now(), upload: !!body.upload,
+    settings: keysFrom(req, body),
+    payload: { topic, tone: body.tone || 'stage', length: body.length || 'standard', voiceId: body.voiceId || process.env.CARTESIA_VOICE_ID || '', source: body.source || '', channel: body.channel || '', url: body.url || '', lessons: body.lessons || [], withVoice: body.withVoice !== false },
+  }));
+  JOBS.push(...created); runQueue(BASE_URL);
+  send(res, 200, { jobs: created.map(publicJob) });
+}
+
+// 다른 웹사이트가 이 로컬 서버로 요청을 몰래 보내 API 키를 쓰지 못하게 막는다
+// (Host 검사 = DNS 리바인딩 차단, Origin 검사 = 다른 사이트의 요청 차단, JSON 강제 = 단순 요청 우회 차단)
+function allowed(req) {
+  const host = String(req.headers.host || '').toLowerCase();
+  const okHost = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(host) || (process.env.ALLOWED_HOSTS || '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean).includes(host);
+  if (!okHost) return false;
+  const origin = req.headers.origin;
+  if (origin && origin !== 'null') {
+    try { if (new URL(origin).host.toLowerCase() !== host) return false; } catch { return false; }
+  }
+  if (req.method === 'POST' && !String(req.headers['content-type'] || '').includes('application/json')) return false;
+  return true;
 }
 
 const server = http.createServer(async (req, res) => {
   try {
+    if (!allowed(req)) return send(res, 403, { error: '허용되지 않은 요청입니다' });
     if (req.method === 'GET' && req.url === '/api/status') {
       return send(res, 200, {
         server: true, claudeModel: CLAUDE_MODEL, cartesiaModel: CARTESIA_MODEL, cartesiaVersion: CARTESIA_VERSION,
         claudeKey: !!process.env.ANTHROPIC_API_KEY, cartesiaKey: !!process.env.CARTESIA_API_KEY, voiceId: !!process.env.CARTESIA_VOICE_ID,
+        youtube: !!(process.env.YT_CLIENT_ID && process.env.YT_CLIENT_SECRET && process.env.YT_REFRESH_TOKEN),
       });
     }
+    if (req.method === 'GET' && req.url === '/api/jobs') return send(res, 200, { jobs: JOBS.map(publicJob).reverse() });
+    if (req.method === 'POST' && req.url === '/api/render') return await handleRender(req, res);
+    if (req.method === 'POST' && req.url === '/api/jobs') return await handleJobs(req, res);
     if (req.method === 'POST' && req.url === '/api/claude') return await handleClaude(req, res);
     if (req.method === 'POST' && req.url === '/api/tts') return await handleTTS(req, res);
     if (req.method === 'GET') return serveStatic(req, res);
@@ -193,4 +316,18 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, HOST, () => console.log(`영상 스튜디오: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
+// 다른 스크립트(pipeline.mjs)에서 불러 쓸 수 있게 시작 함수를 내보낸다
+export function startServer({ port = PORT, host = HOST } = {}) {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, host, () => {
+      const p = server.address().port;
+      BASE_URL = `http://127.0.0.1:${p}`;
+      resolve({ server, port: p, baseUrl: BASE_URL, jobs: JOBS, runQueue: () => runQueue(BASE_URL) });
+    });
+  });
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  startServer().then(({ port }) => console.log(`영상 스튜디오: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${port}`));
+}

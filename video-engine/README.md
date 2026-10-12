@@ -9,9 +9,12 @@
 ```bash
 cd video-engine
 npm install
+npm run setup            # MP4 렌더용 헤드리스 크롬 설치 (처음 한 번)
 cp .env.example .env     # ANTHROPIC_API_KEY, CARTESIA_API_KEY, CARTESIA_VOICE_ID 입력
 npm start                # http://127.0.0.1:8787
 ```
+
+MP4를 만들려면 **ffmpeg**가 필요합니다(윈도우: `winget install Gyan.FFmpeg`, 맥: `brew install ffmpeg`). PATH에 없으면 `.env`의 `FFMPEG_PATH`에 경로를 적으세요.
 
 키를 `.env` 대신 스튜디오의 ⚙ 설정에 넣어도 됩니다(브라우저에만 저장, 로컬 서버로만 전송). 서버 없이 `studio.html`을 파일로 열면 **오프라인 모드**로 동작합니다. 이때는 "프롬프트 복사"로 Claude 대화창에서 대본을 받아 "JSON 붙여넣기"로 넣고, 음성 대신 브라우저 TTS로 미리 듣습니다.
 
@@ -21,7 +24,30 @@ npm start                # http://127.0.0.1:8787
 2. **주제와 대본**: 주제를 쓰거나 추천 주제(톤별 4개 또는 ✨ AI 추천)를 누르고, 길이(쇼츠 45초 / 표준 2분 / 롱폼 4분)를 고른 뒤 "대본 만들기". 참고 자료를 넣으면 그 안의 사실과 숫자만 씁니다.
 3. **내 목소리 입히기**: Cartesia 목소리 ID를 넣고 "모든 장면 음성 만들기". 단어별 타임스탬프로 자막 타이밍과 장면 길이가 말에 맞춰집니다.
 4. **검수**: "숫자 검수 실행"으로 숫자 검문·장면 속도·밝기·움직임·정지 화면·자막 속도·음량을 톤 목표와 비교하고, 컨택트시트(24장)로 눈 검수를 합니다. 걸린 항목은 버튼 한 번으로 **실수 노트**에 규칙으로 넣을 수 있고, 실수 노트는 다음 대본 프롬프트에 자동으로 들어갑니다.
-5. **내보내기**: "WebM 녹화"(화면 + 효과음 + BGM + 내레이션), "대본 JSON 저장".
+5. **내보내기**: "🎬 MP4 만들기"는 서버가 화면을 프레임 단위로 그리고 소리를 따로 믹스해 1080p MP4를 만듭니다(실시간보다 빠르고 프레임 누락이 없습니다). 서버 없이 쓸 때는 "WebM 녹화"(실시간)를 씁니다.
+6. **자동 제작 대기열**: 주제를 한 줄에 하나씩 넣으면 서버가 차례로 대본 → 숫자 검문(실패 시 자동 재작성) → 내 목소리 → 검수 → MP4까지 만들고, 결과 링크(MP4·컨택트시트·대본·유튜브 정보)를 목록에 띄웁니다. "유튜브 비공개 업로드"를 켜면 검수 실패가 없는 영상만 비공개로 올립니다.
+
+만든 음성은 브라우저(IndexedDB)에 보관돼서 새로고침해도 다시 돈을 내고 만들 필요가 없습니다.
+
+## 예약 자동 제작 (사람 손 없이)
+
+```bash
+node pipeline.mjs --topic "회의록 5분 만에 정리하기" --tone minimal --length shorts
+node pipeline.mjs --topics topics.txt --count 1 --tone stage --upload
+```
+
+`--topics` 파일은 한 줄에 주제 하나이고(`topics.example.txt` 참고), 완성한 주제는 `topics.done.txt`로 옮겨지니 같은 명령을 매일 예약하면 다음 주제부터 차례로 만듭니다. 결과는 `out/<시각>-<주제>/`에 `video.mp4`, `contact-sheet.png`, `script.json`, `qa.json`, `youtube.json`(제목·설명·챕터·태그)으로 남습니다. 실수 노트는 `lessons.txt`에 한 줄에 하나씩 적으면 대본마다 들어갑니다.
+
+- 윈도우 작업 스케줄러: 동작 = `node`, 인수 = `pipeline.mjs --topics topics.txt --count 1`, 시작 위치 = `video-engine` 폴더
+- 맥·리눅스 cron (매일 오전 6시): `0 6 * * * cd /경로/video-engine && node pipeline.mjs --topics topics.txt --count 1 >> out/cron.log 2>&1`
+- 완성·실패 알림: `.env`의 `NOTIFY_WEBHOOK_URL`에 슬랙·디스코드 웹훅 주소를 넣으면 결과를 보내 줍니다.
+
+## 유튜브 업로드 준비 (선택)
+
+1. Google Cloud 콘솔에서 프로젝트를 만들고 **YouTube Data API v3**를 사용 설정합니다.
+2. OAuth 동의 화면을 만들고(테스트 사용자에 내 계정 추가), 사용자 인증 정보에서 **OAuth 클라이언트 ID(데스크톱 앱)**를 만듭니다.
+3. `.env`에 `YT_CLIENT_ID`, `YT_CLIENT_SECRET`을 넣고 `npm run youtube:auth`를 실행해 브라우저에서 허용하면 `YT_REFRESH_TOKEN`이 자동으로 저장됩니다.
+4. 이후 업로드는 항상 **비공개**이고, AI 합성 콘텐츠 표시(`containsSyntheticMedia`)가 켜진 채로 올라갑니다. 확인 후 유튜브 스튜디오에서 공개로 바꾸세요. 업로드에는 API 하루 할당량이 있으니 실제 한도는 Google Cloud 콘솔에서 확인하세요.
 
 ## 톤 카드 11장
 
@@ -47,7 +73,10 @@ npm start                # http://127.0.0.1:8787
 video-engine/
 ├─ studio.html         스튜디오 (메인)
 ├─ player.html         대본 JSON만 재생하는 간단한 플레이어
-├─ server.mjs          로컬 서버: 정적 파일 + /api/claude + /api/tts (Cartesia)
+├─ server.mjs          로컬 서버: 정적 파일 + /api/claude + /api/tts + /api/render + /api/jobs
+├─ produce.mjs         헤드리스 제작기: 대본·음성·검수 자동 실행 + 프레임 렌더 → ffmpeg MP4
+├─ pipeline.mjs        예약 실행용 CLI (주제 파일 → MP4 → 선택: 유튜브 업로드)
+├─ youtube.mjs         유튜브 비공개 업로드 + 최초 인증(auth)
 ├─ script.js           데모 대본
 ├─ PROMPT.md           서버 없이 쓸 때의 대본 프롬프트 예시
 ├─ docs/automation-plan.md  자동화 사이트 기획서
@@ -60,6 +89,7 @@ video-engine/
    ├─ audio.js         효과음 19종 + BGM 프리셋 7종 합성 + 내레이션 예약
    ├─ prompt.js        톤 카드·길이·실수 노트 → 대본 프롬프트
    ├─ qa.js            자동 검수
+   ├─ offline.js       프레임 렌더 · 오프라인 오디오 믹스 · 컨택트시트 · 유튜브 정보
    ├─ studio.js        스튜디오 화면 로직
    └─ lib.js · graphics.js · mascot.js
 ```
@@ -68,4 +98,5 @@ video-engine/
 
 - Cartesia 연동은 공개 문서 형식(`/tts/sse`, `add_timestamps`, `word_timestamps`)에 맞춰 작성했고, 가짜 Cartesia 서버로 흐름을 시험했습니다. 실제 계정으로는 아직 확인하지 않았으니 첫 실행에서 오류가 나면 ⚙ 설정의 모델(`sonic-3`)과 `Cartesia-Version`(`2024-11-13`)을 계정에 맞게 바꿔 보세요. SSE가 실패하면 서버가 `/tts/bytes`로 다시 시도합니다(이때는 자막을 글자 수 비례로 맞춤).
 - 대본 생성은 `claude-opus-5-5`를 쓰고, 안전 분류기가 거절할 때 서버 측 대체 모델로 다시 시도하는 옵션(`fallbacks: "default"`)을 켜 두었습니다. 다른 모델을 쓰려면 `.env`의 `CLAUDE_MODEL`을 바꾸세요.
-- WebM 녹화는 실시간으로 진행됩니다. MP4 일괄 렌더는 기획서의 2단계입니다.
+- 서버는 이 컴퓨터(127.0.0.1)에서만 열리고, 다른 웹사이트가 몰래 요청을 보내 API 키를 쓰지 못하도록 출처·호스트를 검사합니다. 다른 기기에서 접속하게 하려면 로그인 기능을 먼저 붙이세요.
+- 화면 비율은 16:9(1920×1080)입니다. 세로형 쇼츠(9:16) 레이아웃은 아직 없습니다.

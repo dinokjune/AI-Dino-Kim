@@ -79,6 +79,9 @@
   .qa li b { display: block; margin-bottom: 3px; }
   .qa li pre { margin: 0; white-space: pre-wrap; font-family: inherit; color: var(--muted); }
   .qa li button { margin-top: 6px; font-size: 12px; padding: 4px 9px; }
+  .qa li.running { border-color: var(--accent); } .qa li.queued { border-color: var(--muted); } .qa li.done { border-color: var(--ok); } .qa li.error { border-color: var(--bad); }
+  .qa li a { color: var(--accent); margin-right: 12px; font-size: 13px; }
+  .qa li .bar { height: 4px; background: #15110d; border-radius: 99px; margin-top: 6px; overflow: hidden; } .qa li .bar i { display: block; height: 100%; background: var(--accent); }
   .lessons { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
   .lessons li { display: flex; gap: 8px; align-items: start; background: var(--panel2); border-radius: 8px; padding: 8px 10px; font-size: 13.5px; }
   .lessons li span { flex: 1; }
@@ -165,6 +168,21 @@
       <div class="row"><input type="text" id="lesson" class="fill" placeholder="예: 숫자는 처음부터 최종값으로 보여 준다"><button class="b" id="btn-lesson">추가</button></div>
       <ul class="lessons" id="lessons"></ul>
     </section>
+
+    <section class="step">
+      <h2><span class="n">5</span>자동 제작 대기열</h2>
+      <p class="hint">주제를 한 줄에 하나씩 넣으면 서버가 차례로 대본 → 내 목소리 → 검수 → MP4까지 만듭니다. 위에서 고른 톤·길이·목소리·참고 자료·실수 노트가 그대로 쓰입니다. 숫자 검문에 걸린 영상은 업로드하지 않습니다.</p>
+      <textarea id="queue-topics" placeholder="회의록 5분 만에 정리하기&#10;초보자를 위한 프롬프트 3원칙"></textarea>
+      <div class="row" style="margin-top:8px">
+        <span class="chk"><input type="checkbox" id="queue-voice" checked><label for="queue-voice">내 목소리 포함</label></span>
+        <span class="chk"><input type="checkbox" id="queue-upload"><label for="queue-upload">유튜브 비공개 업로드</label></span>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="b primary" id="btn-queue">대기열에 넣기</button>
+      </div>
+      <div class="status" id="queue-status"></div>
+      <ul class="qa" id="jobs"></ul>
+    </section>
   </div>
 
   <div class="preview">
@@ -176,6 +194,7 @@
       <span id="time">0.0 / 0.0s</span>
     </div>
     <div class="controls">
+      <button class="b primary" id="btn-mp4">🎬 MP4 만들기</button>
       <button class="b" id="rec">● WebM 녹화</button>
       <button class="b" id="btn-json">대본 JSON 저장</button>
       <button class="b" id="btn-edit">대본 편집</button>
@@ -206,7 +225,9 @@
 </dialog>
 <div id="drop">대본 JSON을 놓으세요</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<!-- 서버로 열면 내장 p5(node_modules), 파일로 열면 CDN -->
+<script src="vendor/p5.min.js"></script>
+<script>window.p5 || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"><\/script>')</script>
 <script src="src/lib.js"></script>
 <script src="src/tones.js"></script>
 <script src="src/graphics.js"></script>
@@ -218,6 +239,7 @@
 <script src="script.js"></script>
 <script src="src/engine.js"></script>
 <script src="src/qa.js"></script>
+<script src="src/offline.js"></script>
 <script src="src/studio.js"></script>
 </body>
 </html>

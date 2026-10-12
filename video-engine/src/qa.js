@@ -21,6 +21,23 @@ function onScreenStrings(s) {
   return out;
 }
 
+// 화면 숫자 중 내레이션·주제·참고 자료에 없는 것 (렌더 없이 대본만으로 검사 → 음성 만들기 전에 걸러 낸다)
+function numberIssues(source = '') {
+  const allowed = new Set();
+  [source, META().topic, META().title, META().source, ...TL.map((e) => e.s.say)].forEach((t) => numbersIn(t).forEach((n) => allowed.add(n)));
+  const bad = [];
+  TL.forEach((e) => {
+    const s = e.s;
+    onScreenStrings(s).forEach(({ v, where }) => numbersIn(v).forEach((n) => {
+      if (allowed.has(n)) return;
+      if (s.type === 'step' || (s.type === 'cards' && where.endsWith('.num'))) return; // 단계 번호
+      if (/^[0-9]$/.test(n) && where.startsWith('labels')) return;
+      bad.push(`${e.i + 1}번(${s.type}) ${where}: "${v}"`);
+    }));
+  });
+  return bad;
+}
+
 // 캔버스를 작게 줄여 밝기와 움직임을 잰다
 const QA_CANVAS = (() => { const c = document.createElement('canvas'); c.width = 64; c.height = 36; return c; })();
 function sampleFrame(T) {
@@ -48,18 +65,7 @@ async function runQA({ source = '' } = {}) {
   if (wasPlaying) pause();
 
   // 1) 숫자 검문: 화면 숫자가 내레이션·주제·참고 자료에 실제로 있는가
-  const allowed = new Set();
-  [source, META().topic, META().title, ...TL.map((e) => e.s.say)].forEach((t) => numbersIn(t).forEach((n) => allowed.add(n)));
-  const bad = [];
-  TL.forEach((e) => {
-    const s = e.s;
-    onScreenStrings(s).forEach(({ v, where }) => numbersIn(v).forEach((n) => {
-      if (allowed.has(n)) return;
-      if (s.type === 'step' || s.type === 'cards' && where.endsWith('.num')) return; // 단계 번호
-      if (/^[0-9]$/.test(n) && where.startsWith('labels')) return;
-      bad.push(`${e.i + 1}번(${s.type}) ${where}: "${v}"`);
-    }));
-  });
+  const bad = numberIssues(source);
   if (bad.length) R('fail', '숫자 검문: 근거 없는 숫자', `내레이션·주제·참고 자료에 없는 숫자가 화면에 있습니다. 출처를 확인하거나 say에 같은 숫자를 넣으세요.\n· ${bad.join('\n· ')}`);
   else R('pass', '숫자 검문', '화면에 나오는 숫자가 모두 내레이션이나 참고 자료에 있습니다.');
 

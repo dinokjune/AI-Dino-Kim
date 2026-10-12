@@ -1,2 +1,5 @@
 .env
 node_modules/
+out/
+lessons.txt
+topics.done.txt

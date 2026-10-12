@@ -33,6 +33,10 @@ async function checkServer() {
   $('btn-script').disabled = !SERVER;
   $('btn-topics').disabled = !SERVER;
   $('btn-voice').disabled = !SERVER;
+  $('btn-queue').disabled = !SERVER;
+  $('queue-upload').disabled = !(SERVER && SERVER.youtube);
+  $('queue-upload').title = SERVER && SERVER.youtube ? '' : '유튜브 업로드 설정(README 참고)을 하면 켤 수 있습니다';
+  if (SERVER) pollJobs();
   if (!SERVER) status('script-status', '서버 없이 열렸습니다. "프롬프트 복사" → Claude 대화창에 붙여넣기 → 받은 JSON을 "JSON 붙여넣기"로 넣으면 됩니다. 음성 생성은 서버(npm start)가 필요합니다.');
 }
 
@@ -116,13 +120,15 @@ async function makeScript() {
   const inp = promptInputs();
   if (!inp.topic) return status('script-status', '주제를 먼저 적어 주세요.', true);
   $('btn-script').disabled = true;
-  status('script-status', `"${inp.topic}" 대본을 쓰는 중… (톤: ${inp.card.name}, 보통 30초~2분)`);
   try {
-    const r = await api('/api/claude', { prompt: buildScriptPrompt(inp), maxTokens: 32000 });
-    const obj = extractJSON(r.text);
-    obj.meta = Object.assign({ tone: inp.card.id, topic: inp.topic }, obj.meta || {}, { tone: inp.card.id });
-    applyScript(obj);
-    status('script-status', `완료: 장면 ${obj.scenes.length}개, 약 ${TOTAL.toFixed(0)}초. 다음은 목소리 입히기입니다.`);
+    const r = await writeScript({
+      ...inp, voiceId: $('voice-id').value.trim(),
+      onStep: (n) => status('script-status', n ? '근거 없는 숫자나 형식 오류가 있어 한 번 더 쓰는 중…' : `"${inp.topic}" 대본을 쓰는 중… (톤: ${inp.card.name}, 보통 30초~2분)`),
+    });
+    curT = 0;
+    store.set('script', SCRIPT);
+    const warn = r.numberIssues.length ? `\n주의: 근거 없는 숫자 ${r.numberIssues.length}개가 남았습니다. 검수에서 확인하세요.` : '';
+    status('script-status', `완료: 장면 ${TL.length}개, 약 ${TOTAL.toFixed(0)}초. 다음은 목소리 입히기입니다.\n${r.log.join(' · ')}${warn}`);
   } catch (e) {
     status('script-status', '대본 생성 실패: ' + e.message, true);
   } finally { $('btn-script').disabled = !SERVER; }
@@ -141,45 +147,128 @@ async function suggestTopics() {
   finally { $('btn-topics').disabled = !SERVER; }
 }
 
+// ── 음성 보관: 새로고침해도 만든 음성을 잃지 않게 IndexedDB에 둔다 ──
+const voiceDB = {
+  open() {
+    if (this._p) return this._p;
+    this._p = new Promise((resolve, reject) => {
+      const r = indexedDB.open('studio-voices', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('v');
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+    return this._p;
+  },
+  async put(key, val) {
+    try { const db = await this.open(); db.transaction('v', 'readwrite').objectStore('v').put(val, key); } catch (e) {}
+  },
+  async get(key) {
+    try {
+      const db = await this.open();
+      return await new Promise((res) => { const q = db.transaction('v').objectStore('v').get(key); q.onsuccess = () => res(q.result); q.onerror = () => res(null); });
+    } catch (e) { return null; }
+  },
+  async clear() { try { const db = await this.open(); db.transaction('v', 'readwrite').objectStore('v').clear(); } catch (e) {} },
+};
+
+// 현재 대본의 장면 중 저장된 음성이 있으면 불러온다
+async function restoreVoices() {
+  const found = {};
+  for (const e of TL) {
+    const k = voiceKey(e.s);
+    if (VOICE[k]) continue;
+    const v = await voiceDB.get(k);
+    if (v) found[k] = v;
+  }
+  if (!Object.keys(found).length) return 0;
+  await importVoices(found);
+  loadScript(SCRIPT);
+  return Object.keys(found).length;
+}
+
 // ── 3. 목소리 (Cartesia) ──
-function b64ToArrayBuffer(b64) {
-  const bin = atob(b64), buf = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-  return buf.buffer;
+// 실패하면 예외를 던진다 (화면 버튼과 자동 제작이 같이 쓴다)
+async function generateVoices({ voiceId, onProgress } = {}) {
+  const s = settings();
+  SCRIPT.meta.voiceId = voiceId || '';
+  loadScript(SCRIPT); // voiceId가 바뀌면 장면 키도 바뀐다
+  AE.init();
+  const todo = TL.filter((e) => e.s.say && !VOICE[voiceKey(e.s)]);
+  const total = todo.length;
+  let done = 0; const notes = [];
+  const worker = async () => {
+    while (todo.length) {
+      const e = todo.shift();
+      const r = await api('/api/tts', { text: stripMarks(e.s.say), voiceId, model: s.cartesiaModel || undefined, version: s.cartesiaVersion || undefined });
+      const buffer = await AE.ctx.decodeAudioData(base64ToArrayBuffer(r.audio));
+      VOICE[voiceKey(e.s)] = { buffer, duration: buffer.duration, words: r.words || [], wav: r.audio };
+      voiceDB.put(voiceKey(e.s), { audio: r.audio, words: r.words || [] });
+      if (r.note) notes.push(r.note);
+      done++;
+      if (onProgress) onProgress(done, total);
+    }
+  };
+  try { await Promise.all([worker(), worker()]); }
+  finally { loadScript(SCRIPT); }
+  return { done, notes };
 }
 
 async function makeVoices() {
   const voiceId = $('voice-id').value.trim();
   if (!voiceId && !(SERVER && SERVER.voiceId)) return status('voice-status', 'Cartesia 목소리 ID를 넣어 주세요.', true);
-  store.set('voiceId', voiceId);
-  SCRIPT.meta.voiceId = voiceId;
-  AE.init();
-  const s = settings();
-  const todo = TL.filter((e) => e.s.say && !VOICE[voiceKey(e.s)]);
-  if (!todo.length) return status('voice-status', '모든 장면에 이미 음성이 있습니다.');
+  store.set('f.voice-id', voiceId);
   $('btn-voice').disabled = true;
-  let done = 0, notes = [];
   const bar = $('voice-bar');
-  const worker = async () => {
-    while (todo.length) {
-      const e = todo.shift();
-      status('voice-status', `${done + 1}/${done + todo.length + 1} 장면 음성 생성 중…`);
-      const r = await api('/api/tts', { text: stripMarks(e.s.say), voiceId, model: s.cartesiaModel || undefined, version: s.cartesiaVersion || undefined });
-      const buffer = await AE.ctx.decodeAudioData(b64ToArrayBuffer(r.audio));
-      VOICE[voiceKey(e.s)] = { buffer, duration: buffer.duration, words: r.words || [] };
-      if (r.note) notes.push(r.note);
-      done++;
-      bar.style.width = `${(done / (done + todo.length)) * 100}%`;
-    }
-  };
   try {
-    await Promise.all([worker(), worker()]);
-    loadScript(SCRIPT);
-    status('voice-status', `완료: ${done}개 장면. 영상 길이 ${TOTAL.toFixed(1)}초로 맞췄습니다.` + (notes.length ? `\n참고: ${notes[0]}` : ''));
+    const { done, notes } = await generateVoices({
+      voiceId,
+      onProgress: (d, t) => { bar.style.width = `${(d / t) * 100}%`; status('voice-status', `${d}/${t} 장면 음성 생성 중…`); },
+    });
+    store.set('script', SCRIPT);
+    status('voice-status', done ? `완료: ${done}개 장면. 영상 길이 ${TOTAL.toFixed(1)}초로 맞췄습니다.` + (notes.length ? `\n참고: ${notes[0]}` : '') : '모든 장면에 이미 음성이 있습니다.');
   } catch (e) {
-    loadScript(SCRIPT);
     status('voice-status', '음성 생성 실패: ' + e.message, true);
   } finally { $('btn-voice').disabled = !SERVER; }
+}
+
+// 화면 없이 주제 하나를 끝까지 만든다: 대본 → 숫자 검문(실패 시 1회 재작성) → 음성 → 검수
+// 서버의 자동 제작 대기열이 헤드리스 브라우저에서 부른다.
+// 대본 작성: 형식 오류나 근거 없는 숫자가 나오면 이유를 알려 주고 한 번 다시 쓰게 한다
+async function writeScript({ topic, card, length = 'standard', source = '', lessons = [], channel = '', url = '', voiceId = '', onStep }) {
+  const log = [];
+  let issues = [], last = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (onStep) onStep(attempt);
+    const extra = attempt ? ['지난 시도에서 문제가 있었다: ' + issues.join(' / ') + ' → 형식을 지키고, 화면 숫자는 say와 참고 자료에 있는 것만 쓴다'] : [];
+    const r = await api('/api/claude', { prompt: buildScriptPrompt({ topic, card, length, source, lessons: [...lessons, ...extra], channel, url }), maxTokens: 32000 });
+    let obj;
+    try { obj = extractJSON(r.text); } catch (e) { issues = [e.message]; log.push(`대본 ${attempt + 1}차: JSON 오류`); continue; }
+    const errs = validateScript(obj);
+    if (errs.length) { issues = errs; log.push(`대본 ${attempt + 1}차: 형식 오류 ${errs.length}개`); continue; }
+    obj.meta = Object.assign({}, obj.meta, { tone: card.id, topic, source, voiceId });
+    if (channel) obj.meta.channel = channel;
+    if (url) obj.meta.url = url;
+    loadScript(obj);
+    last = obj;
+    issues = numberIssues(source);
+    log.push(`대본 ${attempt + 1}차: 장면 ${TL.length}개, 근거 없는 숫자 ${issues.length}개`);
+    if (!issues.length) break;
+  }
+  if (!last) throw new Error('대본을 만들지 못했습니다: ' + issues.slice(0, 3).join(' / '));
+  return { script: last, log, numberIssues: issues };
+}
+
+// 화면 없이 주제 하나를 끝까지 만든다: 대본(재작성 포함) → 음성 → 검수
+// 서버의 자동 제작 대기열이 헤드리스 브라우저에서 부른다.
+async function autopilot({ topic, tone, length = 'standard', voiceId = '', source = '', channel = '', url = '', lessons = [], withVoice = true }) {
+  const card = TONE_CARDS.find((c) => c.id === tone) || TONE_CARDS[0];
+  const { log } = await writeScript({ topic, card, length, source, lessons, channel, url, voiceId });
+  if (withVoice) {
+    const v = await generateVoices({ voiceId });
+    log.push(`음성 ${v.done}개 장면` + (v.notes.length ? ` (${v.notes[0]})` : ''));
+  }
+  const qa = await runQA({ source: source + ' ' + topic });
+  return { script: SCRIPT, qa, log };
 }
 
 // ── 4. 검수 ──
@@ -234,6 +323,76 @@ function addLesson(text) {
   renderLessons();
 }
 
+// ── 5. MP4 렌더 · 자동 제작 대기열 ──
+const STEP_NAMES = { script: '대본·음성·검수', audio: '소리 믹스', frames: '화면 렌더', upload: '유튜브 업로드' };
+let jobTimer = null;
+
+function jobBody(extra) {
+  const s = settings();
+  return Object.assign({ cartesiaModel: s.cartesiaModel || '', cartesiaVersion: s.cartesiaVersion || '' }, extra);
+}
+
+async function renderMP4() {
+  if (!SERVER) return alert('MP4 렌더는 서버(npm start)에서 동작합니다. 지금은 WebM 녹화를 쓰세요.');
+  $('btn-mp4').disabled = true;
+  try {
+    await api('/api/render', jobBody({ script: SCRIPT, voices: exportVoices() }));
+    status('queue-status', 'MP4 렌더를 대기열에 넣었습니다. 아래 5번 목록에서 진행 상황을 볼 수 있습니다.');
+    pollJobs();
+  } catch (e) { alert('렌더 요청 실패: ' + e.message); }
+  finally { $('btn-mp4').disabled = false; }
+}
+
+async function queueTopics() {
+  const topics = $('queue-topics').value.split('\n').map((t) => t.trim()).filter(Boolean);
+  if (!topics.length) return status('queue-status', '주제를 한 줄에 하나씩 넣어 주세요.', true);
+  $('btn-queue').disabled = true;
+  try {
+    const r = await api('/api/jobs', jobBody({
+      topics, tone: selectedCard().id, length: $('length').value, voiceId: $('voice-id').value.trim(),
+      source: $('source').value.trim(), channel: $('channel').value.trim(), url: $('url').value.trim(),
+      lessons: store.get('lessons', []), withVoice: $('queue-voice').checked, upload: $('queue-upload').checked,
+    }));
+    status('queue-status', `${r.jobs.length}개 주제를 대기열에 넣었습니다. 한 편에 몇 분씩 걸립니다.`);
+    $('queue-topics').value = '';
+    pollJobs();
+  } catch (e) { status('queue-status', '대기열 실패: ' + e.message, true); }
+  finally { $('btn-queue').disabled = !SERVER; }
+}
+
+async function pollJobs() {
+  if (!SERVER) return;
+  let list = [];
+  try { list = (await (await fetch('/api/jobs')).json()).jobs || []; } catch (e) { return; }
+  const box = $('jobs');
+  box.innerHTML = '';
+  list.forEach((j) => {
+    const li = document.createElement('li');
+    li.className = j.status;
+    const b = document.createElement('b');
+    b.textContent = `${{ queued: '대기', running: '제작 중', done: '완료', error: '실패' }[j.status]} · ${j.kind === 'render' ? 'MP4 렌더' : '자동 제작'} · ${j.title}`;
+    li.appendChild(b);
+    const pre = document.createElement('pre');
+    if (j.status === 'running') pre.textContent = `${STEP_NAMES[j.step] || '준비'} ${j.progress ?? 0}%`;
+    else if (j.status === 'done') pre.textContent = [`${(j.duration || 0).toFixed(1)}초`, j.qaSummary ? `검수 ${j.qaSummary}` : '', ...(j.log || [])].filter(Boolean).join('\n');
+    else if (j.status === 'error') pre.textContent = j.error;
+    li.appendChild(pre);
+    if (j.status === 'running') { const bar = document.createElement('div'); bar.className = 'bar'; bar.innerHTML = `<i style="width:${j.progress || 0}%"></i>`; li.appendChild(bar); }
+    if (j.files) {
+      const links = document.createElement('div');
+      [['영상 MP4', j.files.mp4], ['컨택트시트', j.files.sheet], ['대본', j.files.dir + '/script.json'], ['유튜브 정보', j.files.dir + '/youtube.json']].forEach(([t, href]) => {
+        const a = document.createElement('a'); a.href = href; a.target = '_blank'; a.rel = 'noopener'; a.textContent = t; links.appendChild(a);
+      });
+      if (j.youtube) { const a = document.createElement('a'); a.href = j.youtube.studio; a.target = '_blank'; a.rel = 'noopener'; a.textContent = '유튜브 스튜디오(비공개)'; links.appendChild(a); }
+      li.appendChild(links);
+    }
+    box.appendChild(li);
+  });
+  const active = list.some((j) => j.status === 'queued' || j.status === 'running');
+  clearTimeout(jobTimer);
+  if (active) jobTimer = setTimeout(pollJobs, 2000);
+}
+
 // ── 엔진이 부르는 UI 인터페이스 ──
 const UI = {
   bgmOn() { return $('bgm').checked; },
@@ -255,6 +414,7 @@ const UI = {
     if (META().tone !== tone) { const s = JSON.parse(JSON.stringify(SCRIPT)); s.meta.tone = tone; loadScript(s); }
     renderTones();
     renderLessons();
+    if (!HEADLESS) restoreVoices().then((n) => { if (n) status('voice-status', `저장해 둔 음성 ${n}개를 불러왔습니다.`); });
 
     $('play').onclick = () => (playing ? pause() : play());
     $('restart').onclick = () => seek(0);
@@ -276,8 +436,10 @@ const UI = {
       catch (e) { status('script-status', 'JSON 오류: ' + e.message, true); }
     };
     $('btn-voice').onclick = makeVoices;
-    $('btn-voice-clear').onclick = () => { Object.keys(VOICE).forEach((k) => delete VOICE[k]); loadScript(SCRIPT); $('voice-bar').style.width = '0'; status('voice-status', '음성을 지웠습니다.'); };
+    $('btn-voice-clear').onclick = () => { Object.keys(VOICE).forEach((k) => delete VOICE[k]); voiceDB.clear(); loadScript(SCRIPT); $('voice-bar').style.width = '0'; status('voice-status', '음성을 지웠습니다.'); };
     $('btn-qa').onclick = doQA;
+    $('btn-mp4').onclick = renderMP4;
+    $('btn-queue').onclick = queueTopics;
     $('btn-lesson').onclick = () => { addLesson($('lesson').value); $('lesson').value = ''; };
     $('btn-json').onclick = () => {
       const a = document.createElement('a');

@@ -165,8 +165,8 @@ SCENES.number = {
       drawIcon(icon, 0, 0, 300, t);
     });
     const { raw, num, dec, comma } = this.parse(s);
-    // countUp:false 면 처음부터 최종값을 보여 준다 (중간 가짜값 방지)
-    const p = s.countUp === false || isNaN(num) ? 1 : easeOut(clamp01((t - 0.5) / 1.2));
+    // 기본은 처음부터 최종값 (0부터 올라가는 연출은 중간에 가짜 숫자가 찍힌다). countUp:true 일 때만 올라간다.
+    const p = s.countUp !== true || isNaN(num) ? 1 : easeOut(clamp01((t - 0.5) / 1.2));
     let shown = raw;
     if (!isNaN(num) && p < 1) {
       shown = (num * p).toFixed(dec);
@@ -184,7 +184,7 @@ SCENES.number = {
   },
   cues(s) {
     const out = [{ at: 0.2, name: 'pop' }];
-    if (s.countUp !== false) for (let i = 0; i < 10; i++) out.push({ at: 0.5 + i * 0.12, name: 'tick', vol: 0.45 });
+    if (s.countUp === true) for (let i = 0; i < 10; i++) out.push({ at: 0.5 + i * 0.12, name: 'tick', vol: 0.45 });
     out.push({ at: 1.7, name: 'ding' });
     return out;
   },

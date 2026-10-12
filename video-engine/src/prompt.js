@@ -46,7 +46,7 @@ const SCENE_CATALOG = `공통 속성: beat(이 장면의 역할), type, say(내�
 - monitors: count(3~8), labels(선택)
 - bubble: text(말풍선 문장)
 - compare: left/right {label, mode(choppy|smooth|still), seed(0~5), text}, verdict(left|right|none)
-- number: value(문자열, 예 "1,938"), suffix, icon, label, countUp(false면 처음부터 최종값)
+- number: value(문자열, 예 "1,938"), suffix, icon, label (숫자는 처음부터 최종값으로 보인다. countUp: true는 꼭 필요할 때만)
 - funnel: steps [{value, label}] 2~4개
 - title: text, sub, icon
 - typing: name, handle, text, likes
