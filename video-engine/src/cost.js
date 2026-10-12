@@ -23,7 +23,21 @@ function costSettings() {
   };
 }
 
-function emptyCost() { return { claude: { input: 0, output: 0, usd: 0, calls: 0 }, tts: { chars: 0, calls: 0 } }; }
+function emptyCost() { return { claude: { input: 0, output: 0, usd: 0, calls: 0 }, tts: { chars: 0, calls: 0, by: {} } }; }
+
+// TTS 공급자별 1,000자당 달러. 설정값이 없으면 공개 요금 기준 기본값(추정)을 쓴다.
+//  ElevenLabs: 요금제마다 다름(Creator 기준 약 $0.22) · OpenAI tts-1: $15/100만 자 · Google: Neural2·WaveNet $16, Chirp 3 HD $30, Standard $4 /100만 자
+//  클로바: 네이버 클라우드 요금표를 확인해 설정에 넣는다(기본 0)
+function ttsRatePer1k(provider, voice = '', model = '') {
+  const s = (typeof settings === 'function' ? settings() : {}) || {};
+  const user = parseFloat((s.ttsRates || {})[provider]);
+  if (isFinite(user)) return user;
+  if (provider === 'cartesia') return costSettings().usdPerCredit * 1000;
+  if (provider === 'elevenlabs') return 0.22;
+  if (provider === 'openai') return /hd/.test(model) ? 0.03 : 0.015;
+  if (provider === 'google') return /Chirp3|Chirp-HD|Studio/i.test(voice) ? 0.03 : /Standard/i.test(voice) ? 0.004 : 0.016;
+  return 0;
+}
 
 // 지금 영상의 비용 (대본 meta 에 같이 저장되어 JSON 으로 남는다)
 function videoCost() {
@@ -41,15 +55,22 @@ function addCost(c, target) {
     v.claude.usd += c.usd || 0;
     v.claude.calls++;
   }
-  if (c.chars) { v.tts.chars += c.chars; v.tts.calls++; }
+  if (c.chars) {
+    v.tts.chars += c.chars; v.tts.calls++;
+    v.tts.by = v.tts.by || {};
+    const k = c.provider || 'cartesia';
+    v.tts.by[k] = (v.tts.by[k] || 0) + c.chars;
+  }
 }
 
 function priceOf(cost) {
   const cs = costSettings();
-  const credits = cost.tts.chars * cs.creditMult;
-  const ttsUsd = credits * cs.usdPerCredit;
+  const by = cost.tts.by && Object.keys(cost.tts.by).length ? cost.tts.by : { cartesia: cost.tts.chars };
+  const credits = (by.cartesia || 0) * cs.creditMult;
+  let ttsUsd = credits * cs.usdPerCredit;
+  Object.entries(by).forEach(([k, n]) => { if (k !== 'cartesia') ttsUsd += (n / 1000) * ttsRatePer1k(k); });
   const usd = cost.claude.usd + ttsUsd;
-  return { credits, ttsUsd, claudeUsd: cost.claude.usd, usd, krw: usd * cs.krw };
+  return { credits, chars: cost.tts.chars, by, ttsUsd, claudeUsd: cost.claude.usd, usd, krw: usd * cs.krw };
 }
 
 const fmtUsd = (x) => '$' + (x < 0.01 && x > 0 ? x.toFixed(4) : x.toFixed(x < 1 ? 3 : 2));
@@ -69,7 +90,8 @@ function estimateNew(length, promptText) {
   const p = { in: 4, out: 20 }; // claude-opus-5-5
   const claude = (inTok * p.in + g.out * p.out) / 1e6;
   const cs = costSettings();
-  const credits = g.chars * cs.creditMult;
-  const tts = credits * cs.usdPerCredit;
+  const t = (typeof currentTTS === 'function' && currentTTS()) || { provider: 'cartesia' };
+  const credits = t.provider === 'cartesia' ? g.chars * cs.creditMult : g.chars;
+  const tts = t.provider === 'cartesia' ? credits * cs.usdPerCredit : (g.chars / 1000) * ttsRatePer1k(t.provider, t.voiceId, t.model);
   return { claudeLo: claude * 0.6, claudeHi: claude * 1.8, credits, tts, krwLo: (claude * 0.6 + tts) * cs.krw, krwHi: (claude * 1.8 + tts) * cs.krw };
 }

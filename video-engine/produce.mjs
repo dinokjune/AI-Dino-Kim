@@ -52,7 +52,9 @@ export async function withStudioPage(baseUrl, settings, fn) {
 async function waitFonts(page) {
   await page.evaluate(async () => {
     if (typeof loadUserFonts === 'function') await loadUserFonts();
-    const fams = [FONT_HEAD, FONT_BODY, 'Nanum Gothic Coding', 'Noto Sans KR'];
+    // 대본에 나오는 모든 글자를 역할별 글꼴로 미리 받아 둔다 (구글 글꼴 포함)
+    if (typeof ensureScriptFonts === 'function') await ensureScriptFonts([FONT_HEAD, FONT_BODY, FONT_CAPTION, FONT_NUM, 'Nanum Gothic Coding']);
+    const fams = [FONT_HEAD, FONT_BODY, FONT_CAPTION, FONT_NUM, 'Nanum Gothic Coding', 'Noto Sans KR'].filter(Boolean);
     await Promise.all(fams.map((f) => document.fonts.load(`64px "${f}"`).catch(() => null)));
     await document.fonts.ready;
   });

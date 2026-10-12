@@ -105,5 +105,5 @@ const LINE = () => PAL.stroke || PAL.ink;
 const HEAD_BOLD = ['IBM Plex Sans KR', 'Noto Sans KR', 'Noto Serif KR', 'Gaegu', 'Nanum Gothic Coding'];
 function useFont(name) {
   textFont(name);
-  textStyle(HEAD_BOLD.includes(name) && name === FONT_HEAD ? BOLD : NORMAL);
+  textStyle(HEAD_BOLD.includes(name) && (name === FONT_HEAD || name === FONT_CAPTION || name === FONT_NUM) ? BOLD : NORMAL);
 }

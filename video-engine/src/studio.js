@@ -16,6 +16,11 @@ async function api(path, body, tag) {
   if (t) headers['x-cost-tag'] = encodeURIComponent(t);
   if (s.anthropicKey) headers['x-anthropic-key'] = s.anthropicKey;
   if (s.cartesiaKey) headers['x-cartesia-key'] = s.cartesiaKey;
+  const tk = s.ttsKeys || {};
+  if (tk.elevenlabs) headers['x-elevenlabs-key'] = tk.elevenlabs;
+  if (tk.openai) headers['x-openai-key'] = tk.openai;
+  if (tk.google) headers['x-google-key'] = tk.google;
+  if (tk.clovaId) headers['x-clova-key'] = `${tk.clovaId}|${tk.clovaSecret || ''}`;
   const r = await fetch(path, { method: 'POST', headers, body: JSON.stringify(body) });
   const j = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
   if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
@@ -31,7 +36,8 @@ async function checkServer() {
   const set = (id, on, txt) => { const el = $(id); el.textContent = txt; el.className = 'badge ' + (on ? 'on' : 'off'); };
   set('st-server', !!SERVER, SERVER ? '서버 연결됨' : '오프라인 모드');
   set('st-claude', SERVER && (SERVER.claudeKey || s.anthropicKey), 'Claude ' + (SERVER && (SERVER.claudeKey || s.anthropicKey) ? '준비' : '키 없음'));
-  set('st-voice', SERVER && (SERVER.cartesiaKey || s.cartesiaKey), 'Cartesia ' + (SERVER && (SERVER.cartesiaKey || s.cartesiaKey) ? '준비' : '키 없음'));
+  const tp = currentTTS().provider, tReady = ttsReady(tp);
+  set('st-voice', tReady, `${TTS_NAMES[tp]} ` + (tReady ? '준비' : '키 없음'));
   $('btn-script').disabled = !SERVER;
   $('btn-topics').disabled = !SERVER;
   $('btn-voice').disabled = !SERVER;
@@ -39,48 +45,71 @@ async function checkServer() {
   $('queue-upload').disabled = !(SERVER && SERVER.youtube);
   $('queue-upload').title = SERVER && SERVER.youtube ? '' : '유튜브 업로드 설정(README 참고)을 하면 켤 수 있습니다';
   if (SERVER) { pollJobs(); refreshLedger(); }
+  if ($('tts-provider') && $('tts-provider').options.length) checkBadges();
   if ($('font-head') && userFontsPromise) userFontsPromise.then(renderFontSelects);
   if (!SERVER) status('script-status', '서버 없이 열렸습니다. "프롬프트 복사" → Claude 대화창에 붙여넣기 → 받은 JSON을 "JSON 붙여넣기"로 넣으면 됩니다. 음성 생성은 서버(npm start)가 필요합니다.');
 }
 
 function status(id, msg, err) { const el = $(id); el.textContent = msg || ''; el.classList.toggle('err', !!err); }
 
-// ── 내 글꼴 ──
+// ── 글꼴: 역할 4개 (제목 · 자막 · 본문 · 숫자) × 출처 3곳 (Google · 설치된 글꼴 · 다운로드/fonts 폴더) ──
+const FONT_ROLES = ['head', 'caption', 'body', 'number'];
 function currentFonts() {
   const f = store.get('fonts', {}) || {};
-  return f.head || f.body ? { head: f.head || '', body: f.body || '' } : null;
+  return FONT_ROLES.some((r) => f[r]) ? Object.fromEntries(FONT_ROLES.map((r) => [r, f[r] || ''])) : null;
+}
+
+function fontChoices() {
+  const q = ($('font-search').value || '').trim().toLowerCase();
+  const koOnly = $('font-ko-only').checked;
+  const hit = (...names) => !q || names.some((n) => String(n || '').toLowerCase().includes(q));
+  return {
+    google: GOOGLE_KO_FONTS.filter(([f, kind]) => hit(f, kind)).map(([f, kind]) => ({ value: f, label: `${f} · ${kind}` })),
+    system: SYS_FONTS.filter((f) => (!koOnly || f.hangul) && hit(f.family, f.display)).map((f) => ({ value: f.family, label: f.display !== f.family ? `${f.display} (${f.family})` : f.family })),
+    files: USER_FONTS.filter((f) => (!koOnly || f.hangul !== false) && hit(f.family, f.display, f.source)).map((f) => ({ value: f.family, label: `${f.display && f.display !== f.family ? f.display : f.family} · ${f.source}` })),
+  };
 }
 
 function renderFontSelects() {
   const cur = store.get('fonts', {}) || {};
   const card = selectedCard();
-  const fill = (id, toneDefault, val) => {
-    const sel = $(id);
+  const def = { head: card.engine.fontHead, caption: card.engine.fontHead, body: card.engine.fontBody, number: card.engine.fontHead };
+  const ch = fontChoices();
+  FONT_ROLES.forEach((role) => {
+    const sel = $('font-' + role);
     sel.innerHTML = '';
-    const d = document.createElement('option'); d.value = ''; d.textContent = `톤 기본 (${toneDefault})`; sel.appendChild(d);
-    USER_FONTS.forEach((f) => { const o = document.createElement('option'); o.value = f.family; o.textContent = `${f.family}  · ${f.source}`; sel.appendChild(o); });
-    sel.value = USER_FONTS.some((f) => f.family === val) ? val : '';
-  };
-  fill('font-head', card.engine.fontHead, cur.head);
-  fill('font-body', card.engine.fontBody, cur.body);
-  $('fp-head').style.fontFamily = `"${$('font-head').value || card.engine.fontHead}"`;
-  $('fp-body').style.fontFamily = `"${$('font-body').value || card.engine.fontBody}"`;
-  const bySrc = {};
-  USER_FONTS.forEach((f) => { const k = f.source.split(' · ')[0]; bySrc[k] = (bySrc[k] || 0) + 1; });
-  status('font-status', USER_FONTS.length
-    ? `글꼴 ${USER_FONTS.length}개를 찾았습니다 (${Object.entries(bySrc).map(([k, v]) => `${k} ${v}`).join(', ')}).`
-    : (SERVER ? '다운로드 폴더나 video-engine/fonts 폴더에서 글꼴을 찾지 못했습니다. 글꼴 파일을 넣고 "다시 찾기"를 누르거나 "글꼴 파일 추가"로 올리세요.' : '서버 없이 열어 다운로드 폴더를 볼 수 없습니다. "글꼴 파일 추가"로 고르면 이 화면에서만 쓸 수 있습니다.'));
+    const d = document.createElement('option'); d.value = ''; d.textContent = `톤 기본 (${def[role]})`; sel.appendChild(d);
+    const group = (label, list) => {
+      if (!list.length) return;
+      const g = document.createElement('optgroup'); g.label = label;
+      list.forEach((o) => { const op = document.createElement('option'); op.value = o.value; op.textContent = o.label; g.appendChild(op); });
+      sel.appendChild(g);
+    };
+    group(`Google Fonts 한글 (${ch.google.length})`, ch.google);
+    group(`내 컴퓨터에 설치된 글꼴 (${ch.system.length})`, ch.system);
+    group(`다운로드 · fonts 폴더 (${ch.files.length})`, ch.files);
+    // 검색에 걸리지 않아도 지금 고른 글꼴은 목록에 남긴다
+    if (cur[role] && ![...sel.options].some((o) => o.value === cur[role])) { const op = document.createElement('option'); op.value = cur[role]; op.textContent = cur[role] + ' (선택됨)'; sel.appendChild(op); }
+    sel.value = cur[role] || '';
+    $('fp-' + role).style.fontFamily = `"${cur[role] || def[role]}"`;
+  });
+  const total = GOOGLE_KO_FONTS.length + SYS_FONTS.filter((f) => f.hangul).length + USER_FONTS.length;
+  status('font-status', SERVER
+    ? `Google 한글 ${GOOGLE_KO_FONTS.length}종 · 설치된 글꼴 ${SYS_FONTS.length}종(한글 ${SYS_FONTS.filter((f) => f.hangul).length}) · 다운로드·fonts 폴더 ${USER_FONTS.length}종`
+    : `Google 한글 ${GOOGLE_KO_FONTS.length}종을 쓸 수 있습니다. 설치된 글꼴과 다운로드 폴더 글꼴은 서버(npm start)로 열면 보입니다.`);
+  return total;
 }
 
 async function chooseFonts() {
-  const f = { head: $('font-head').value, body: $('font-body').value };
+  const f = Object.fromEntries(FONT_ROLES.map((r) => [r, $('font-' + r).value]));
   store.set('fonts', f);
   status('font-status', '글꼴을 불러오는 중…');
-  await ensureFonts([f.head, f.body]);
+  await Promise.all(FONT_ROLES.map((r) => ensureGoogleFont(f[r])));
   const s = JSON.parse(JSON.stringify(SCRIPT));
   s.meta.fonts = currentFonts();
   if (!s.meta.fonts) delete s.meta.fonts;
   applyScript(s, { keepTime: true });
+  await ensureScriptFonts([FONT_HEAD, FONT_BODY, FONT_CAPTION, FONT_NUM]);
   renderFontSelects();
 }
 
@@ -164,7 +193,6 @@ function applyScript(obj, { keepTime = false } = {}) {
   const ch = $('channel').value.trim(), url = $('url').value.trim();
   if (ch) obj.meta.channel = ch;
   if (url) obj.meta.url = url;
-  obj.meta.voiceId = $('voice-id').value.trim();
   if (!obj.meta.fonts && currentFonts()) obj.meta.fonts = currentFonts();
   if ($('source').value.trim()) obj.meta.source = $('source').value.trim();
   const t = curT;
@@ -181,7 +209,7 @@ async function makeScript() {
   $('btn-script').disabled = true;
   try {
     const r = await writeScript({
-      ...inp, voiceId: $('voice-id').value.trim(), fonts: currentFonts(),
+      ...inp, fonts: currentFonts(),
       onStep: (n) => status('script-status', n ? '근거 없는 숫자나 형식 오류가 있어 한 번 더 쓰는 중…' : `"${inp.topic}" 대본을 쓰는 중… (톤: ${inp.card.name}, 보통 30초~2분)`),
     });
     curT = firstLook();
@@ -246,12 +274,109 @@ async function restoreVoices() {
   return Object.keys(found).length;
 }
 
-// ── 3. 목소리 (Cartesia) ──
-// 실패하면 예외를 던진다 (화면 버튼과 자동 제작이 같이 쓴다)
-async function generateVoices({ voiceId, onProgress } = {}) {
+// ── 3. 목소리 (TTS 공급자 여러 개) ──
+const TTS_NAMES = { cartesia: 'Cartesia', elevenlabs: 'ElevenLabs', openai: 'OpenAI', google: 'Google Cloud', clova: '네이버 클로바' };
+const TTS_NOTES = {
+  cartesia: '내 클론 목소리 사용 가능 · 단어별 시간표로 자막이 말과 정확히 맞음 · 글자당 약 1크레딧',
+  elevenlabs: '내 클론 목소리 사용 가능 · 글자별 시간표로 자막이 말과 정확히 맞음 · 모델 eleven_multilingual_v2',
+  openai: '고정 목소리 11종 · 모델 gpt-4o-mini-tts · 자막은 글자 수 비례',
+  google: '한국어 목소리 다수 (ko-KR-Neural2·Chirp3-HD 등) · 월 100만 자 무료 구간 · 자막은 글자 수 비례',
+  clova: '한국어 전용 화자 · 네이버 클라우드에서 CLOVA Voice 사용 설정 필요 · 자막은 글자 수 비례',
+};
+const TTS_DEFAULT_VOICES = { openai: 'alloy', google: 'ko-KR-Neural2-A', clova: 'nara' };
+
+function ttsReady(provider) {
+  const s = settings(), tk = s.ttsKeys || {};
+  const local = provider === 'cartesia' ? s.cartesiaKey : provider === 'clova' ? tk.clovaId : tk[provider];
+  return !!(SERVER && ((SERVER.tts && SERVER.tts[provider] && SERVER.tts[provider].key) || local));
+}
+
+// 화면에서 고른 목소리 → { provider, voiceId, speed }
+function pickerSpec(n) {
+  const sfx = n === 2 ? '2' : '';
+  const provider = $(`tts${sfx}-provider`).value || 'cartesia';
+  const manual = $(n === 2 ? 'voice2-id' : 'voice-id').value.trim();
+  const voiceId = manual || $(`tts${sfx}-voice`).value || TTS_DEFAULT_VOICES[provider] || '';
+  return { provider, voiceId, speed: parseFloat($('tts-speed').value) || 1 };
+}
+function currentTTS() { return $('tts-provider') ? pickerSpec(1) : (store.get('tts', null) || { provider: 'cartesia', voiceId: '' }); }
+function currentTTS2() { return $('tts2-on') && $('tts2-on').checked ? pickerSpec(2) : null; }
+
+function fillVoiceSelect(sel, voices, keep) {
+  sel.innerHTML = '';
+  const d = document.createElement('option'); d.value = ''; d.textContent = voices.length ? '목소리를 고르세요' : '목록을 불러오거나 ID를 직접 입력'; sel.appendChild(d);
+  voices.forEach((v) => { const o = document.createElement('option'); o.value = v.id; o.textContent = `${v.mine ? '★ ' : ''}${v.name}${v.lang ? ' · ' + v.lang : ''}`; sel.appendChild(o); });
+  if (keep && voices.some((v) => v.id === keep)) sel.value = keep;
+}
+
+async function loadVoiceList(n) {
+  const sfx = n === 2 ? '2' : '';
+  const provider = $(`tts${sfx}-provider`).value;
+  const sel = $(`tts${sfx}-voice`);
+  const cached = store.get(`voices.${provider}`, null);
+  if (cached) fillVoiceSelect(sel, cached, store.get(`tts${sfx}`, {}).voiceId);
+  if (!SERVER) return;
+  try {
+    const s = settings(), tk = s.ttsKeys || {};
+    const headers = {};
+    if (s.cartesiaKey) headers['x-cartesia-key'] = s.cartesiaKey;
+    if (tk.elevenlabs) headers['x-elevenlabs-key'] = tk.elevenlabs;
+    if (tk.google) headers['x-google-key'] = tk.google;
+    const r = await fetch(`/api/voices?provider=${provider}`, { headers });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error);
+    store.set(`voices.${provider}`, j.voices);
+    fillVoiceSelect(sel, j.voices, store.get(`tts${sfx}`, {}).voiceId);
+    status('voice-status', `${TTS_NAMES[provider]} 목소리 ${j.voices.length}개를 불러왔습니다.`);
+  } catch (e) { if (!cached) fillVoiceSelect(sel, [], ''); status('voice-status', `${TTS_NAMES[provider]} 목록: ${e.message}`, true); }
+}
+
+function saveTTSChoice() {
+  store.set('tts', pickerSpec(1));
+  store.set('tts2', Object.assign(pickerSpec(2), { on: $('tts2-on').checked }));
+  $('tts-speed-v').textContent = Number($('tts-speed').value).toFixed(2);
+  $('tts-note').textContent = TTS_NOTES[$('tts-provider').value] || '';
+  updateEstimate(); renderCost(); checkBadges();
+}
+function checkBadges() {
+  const tp = currentTTS().provider, ok = ttsReady(tp), el = $('st-voice');
+  el.textContent = `${TTS_NAMES[tp]} ${ok ? '준비' : '키 없음'}`; el.className = 'badge ' + (ok ? 'on' : 'off');
+}
+
+function initVoicePickers() {
+  ['tts-provider', 'tts2-provider'].forEach((id) => Object.entries(TTS_NAMES).forEach(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v; $(id).appendChild(o); }));
+  const t1 = store.get('tts', null) || { provider: 'cartesia', voiceId: store.get('f.voice-id', ''), speed: 1 };
+  const t2 = store.get('tts2', null) || { provider: 'openai', voiceId: '', on: false };
+  $('tts-provider').value = t1.provider; $('tts2-provider').value = t2.provider;
+  $('tts-speed').value = t1.speed || 1;
+  $('tts2-on').checked = !!t2.on;
+  const known = (p, id) => (store.get(`voices.${p}`, []) || []).some((v) => v.id === id) || ['openai', 'clova'].includes(p);
+  $('voice-id').value = t1.voiceId && !known(t1.provider, t1.voiceId) ? t1.voiceId : '';
+  $('voice2-id').value = t2.voiceId && !known(t2.provider, t2.voiceId) ? t2.voiceId : '';
+  if (t2.on) $('tts2-box').open = true;
+  [1, 2].forEach((n) => {
+    const sfx = n === 2 ? '2' : '';
+    $(`tts${sfx}-provider`).onchange = () => { $(n === 2 ? 'voice2-id' : 'voice-id').value = ''; loadVoiceList(n).then(saveTTSChoice); saveTTSChoice(); };
+    $(`tts${sfx}-voice`).onchange = saveTTSChoice;
+    $(n === 2 ? 'voice2-id' : 'voice-id').onchange = saveTTSChoice;
+  });
+  $('btn-voices').onclick = () => loadVoiceList(1);
+  $('btn-voices2').onclick = () => loadVoiceList(2);
+  $('tts-speed').oninput = saveTTSChoice;
+  $('tts2-on').onchange = saveTTSChoice;
+  // 고정 목록(OpenAI·클로바)이나 저장해 둔 목록은 바로 채운다
+  [1, 2].forEach((n) => { const p = $(`tts${n === 2 ? '2' : ''}-provider`).value; const c = store.get(`voices.${p}`, null); if (c || ['openai', 'clova'].includes(p)) loadVoiceList(n); else fillVoiceSelect($(`tts${n === 2 ? '2' : ''}-voice`), [], ''); });
+  saveTTSChoice();
+}
+
+// 장면마다 정해진 목소리로 음성을 만든다. 실패하면 예외를 던진다 (화면 버튼과 자동 제작이 같이 쓴다)
+async function generateVoices({ tts, tts2 = null, voiceId, onProgress } = {}) {
   const s = settings();
-  SCRIPT.meta.voiceId = voiceId || '';
-  loadScript(SCRIPT); // voiceId가 바뀌면 장면 키도 바뀐다
+  if (!tts) tts = { provider: 'cartesia', voiceId: voiceId || '' }; // 예전 호출 방식
+  SCRIPT.meta.tts = tts;
+  if (tts2 && tts2.voiceId) SCRIPT.meta.tts2 = tts2; else delete SCRIPT.meta.tts2;
+  delete SCRIPT.meta.voiceId;
+  loadScript(SCRIPT); // 목소리가 바뀌면 장면 키도 바뀐다
   AE.init();
   const todo = TL.filter((e) => e.s.say && !VOICE[voiceKey(e.s)]);
   const total = todo.length;
@@ -259,7 +384,12 @@ async function generateVoices({ voiceId, onProgress } = {}) {
   const worker = async () => {
     while (todo.length) {
       const e = todo.shift();
-      const r = await api('/api/tts', { text: stripMarks(e.s.say), voiceId, model: s.cartesiaModel || undefined, version: s.cartesiaVersion || undefined });
+      const v = voiceSpec(e.s);
+      const r = await api('/api/tts', {
+        provider: v.provider, voiceId: v.voiceId, text: stripMarks(e.s.say), speed: v.speed || 1,
+        model: v.model || (v.provider === 'cartesia' ? s.cartesiaModel : '') || undefined,
+        version: v.provider === 'cartesia' ? s.cartesiaVersion || undefined : undefined,
+      });
       const buffer = await AE.ctx.decodeAudioData(base64ToArrayBuffer(r.audio));
       VOICE[voiceKey(e.s)] = { buffer, duration: buffer.duration, words: r.words || [], wav: r.audio };
       voiceDB.put(voiceKey(e.s), { audio: r.audio, words: r.words || [] });
@@ -275,14 +405,14 @@ async function generateVoices({ voiceId, onProgress } = {}) {
 }
 
 async function makeVoices() {
-  const voiceId = $('voice-id').value.trim();
-  if (!voiceId && !(SERVER && SERVER.voiceId)) return status('voice-status', 'Cartesia 목소리 ID를 넣어 주세요.', true);
-  store.set('f.voice-id', voiceId);
+  const tts = currentTTS();
+  if (!ttsReady(tts.provider)) return status('voice-status', `${TTS_NAMES[tts.provider]} API 키를 ⚙ 설정이나 .env에 넣어 주세요.`, true);
+  if (!tts.voiceId && !(SERVER.tts && SERVER.tts[tts.provider] && SERVER.tts[tts.provider].voice)) return status('voice-status', '목소리를 고르거나 ID를 넣어 주세요.', true);
   $('btn-voice').disabled = true;
   const bar = $('voice-bar');
   try {
     const { done, notes } = await generateVoices({
-      voiceId,
+      tts, tts2: currentTTS2(),
       onProgress: (d, t) => { bar.style.width = `${(d / t) * 100}%`; status('voice-status', `${d}/${t} 장면 음성 생성 중…`); },
     });
     store.set('script', SCRIPT);
@@ -326,12 +456,13 @@ async function writeScript({ topic, card, length = 'standard', source = '', less
 
 // 화면 없이 주제 하나를 끝까지 만든다: 대본(재작성 포함) → 음성 → 검수
 // 서버의 자동 제작 대기열이 헤드리스 브라우저에서 부른다.
-async function autopilot({ topic, tone, length = 'standard', voiceId = '', source = '', channel = '', url = '', lessons = [], withVoice = true, fonts = null }) {
-  if (fonts) { await loadUserFonts(); await ensureFonts([fonts.head, fonts.body]); }
+async function autopilot({ topic, tone, length = 'standard', voiceId = '', tts = null, tts2 = null, source = '', channel = '', url = '', lessons = [], withVoice = true, fonts = null }) {
+  if (fonts) { await loadUserFonts(); await Promise.all(Object.values(fonts).map(ensureGoogleFont)); }
   const card = TONE_CARDS.find((c) => c.id === tone) || TONE_CARDS[0];
   const { log } = await writeScript({ topic, card, length, source, lessons, channel, url, voiceId, fonts });
+  await ensureScriptFonts([FONT_HEAD, FONT_BODY, FONT_CAPTION, FONT_NUM]);
   if (withVoice) {
-    const v = await generateVoices({ voiceId });
+    const v = await generateVoices({ tts: tts || { provider: 'cartesia', voiceId }, tts2 });
     log.push(`음성 ${v.done}개 장면` + (v.notes.length ? ` (${v.notes[0]})` : ''));
   }
   const qa = await runQA({ source: source + ' ' + topic });
@@ -380,19 +511,21 @@ function renderCost() {
   const box = $('cost'); if (!box || !SCRIPT) return;
   const c = SCRIPT.meta.cost || emptyCost();
   const p = priceOf(c), cs = costSettings();
-  const pend = pendingTtsChars() * cs.creditMult;
+  const tt = currentTTS();
+  const pendChars = pendingTtsChars();
+  const pendUsd = tt.provider === 'cartesia' ? pendChars * cs.creditMult * cs.usdPerCredit : (pendChars / 1000) * ttsRatePer1k(tt.provider, tt.voiceId, tt.model);
   const rows = [
     ['대본 (Claude)', c.claude.calls ? `${fmtNum(c.claude.input)} 입력 · ${fmtNum(c.claude.output)} 출력 토큰` : '아직 없음', fmtUsd(p.claudeUsd)],
-    ['음성 (Cartesia)', c.tts.calls ? `${fmtNum(p.credits)} 크레딧` : '아직 없음', fmtUsd(p.ttsUsd)],
+    ['음성 (TTS)', c.tts.calls ? Object.entries(p.by).map(([k, n]) => `${TTS_NAMES[k] || k} ${fmtNum(k === 'cartesia' ? n * cs.creditMult : n)}${k === 'cartesia' ? '크레딧' : '자'}`).join(' · ') : '아직 없음', fmtUsd(p.ttsUsd)],
     ['렌더 · 검수', '내 컴퓨터에서 처리', '$0'],
   ];
   let html = '<table>' + rows.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('') +
     `<tr class="sum"><td>이 영상 합계</td><td>${fmtKrw(p.krw)} (환율 ${fmtNum(cs.krw)}원 기준)</td><td>${fmtUsd(p.usd)}</td></tr></table>`;
-  if (pend > 0) html += `<div class="hint" style="margin:8px 0 0">음성을 만들면 약 ${fmtNum(pend)}크레딧(${fmtUsd(pend * cs.usdPerCredit)}, ${fmtKrw(pend * cs.usdPerCredit * cs.krw)})이 더 듭니다.</div>`;
+  if (pendChars > 0) html += `<div class="hint" style="margin:8px 0 0">${TTS_NAMES[tt.provider]}로 음성을 만들면 약 ${fmtNum(pendChars)}자 · ${fmtUsd(pendUsd)} (${fmtKrw(pendUsd * cs.krw)})가 더 듭니다.</div>`;
   if (ledgerCache) {
     const m = ledgerCache.month;
-    const mUsd = m.claudeUsd + m.ttsChars * cs.creditMult * cs.usdPerCredit;
-    html += `<div class="hint" style="margin:8px 0 0">이번 달(${ledgerCache.monthKey}) 누적: Claude ${fmtUsd(m.claudeUsd)} (${m.claudeCalls}회) · 음성 ${fmtNum(m.ttsChars * cs.creditMult)}크레딧 → 합계 ${fmtUsd(mUsd)} ≈ ${fmtKrw(mUsd * cs.krw)}</div>`;
+    const mp = priceOf({ claude: { usd: m.claudeUsd }, tts: { chars: m.ttsChars, by: m.ttsBy || { cartesia: m.ttsChars } } });
+    html += `<div class="hint" style="margin:8px 0 0">이번 달(${ledgerCache.monthKey}) 누적: Claude ${fmtUsd(m.claudeUsd)} (${m.claudeCalls}회) · 음성 ${fmtNum(m.ttsChars)}자 → 합계 ${fmtUsd(mp.usd)} ≈ ${fmtKrw(mp.krw)}</div>`;
   }
   box.innerHTML = html;
 }
@@ -402,17 +535,17 @@ async function makeAll() {
   const inp = promptInputs();
   if (!inp.topic) return status('all-status', '주제를 적거나 아래 추천 주제를 눌러 고르세요.', true);
   if (!SERVER) return status('all-status', '한 번에 완성은 서버(npm start)에서 동작합니다. 지금은 "프롬프트 복사"를 쓰세요.', true);
-  const voiceId = $('voice-id').value.trim();
+  const tts = currentTTS(), tts2 = currentTTS2();
   const btn = $('btn-all'); btn.disabled = true;
   const step = (n, msg) => status('all-status', `[${n}/4] ${msg}`);
   try {
     step(1, `"${inp.topic}" 대본을 쓰는 중… (${inp.card.name} 톤)`);
-    const r = await writeScript({ ...inp, voiceId, fonts: currentFonts(), onStep: (a) => a && step(1, '근거 없는 숫자나 형식 오류가 있어 한 번 더 쓰는 중…') });
+    const r = await writeScript({ ...inp, fonts: currentFonts(), onStep: (a) => a && step(1, '근거 없는 숫자나 형식 오류가 있어 한 번 더 쓰는 중…') });
     curT = firstLook(); store.set('script', SCRIPT); renderCost();
-    if (voiceId || (SERVER && SERVER.voiceId)) {
-      await generateVoices({ voiceId, onProgress: (d, t) => { step(2, `내 목소리 ${d}/${t} 장면`); $('voice-bar').style.width = `${(d / t) * 100}%`; } });
+    if (ttsReady(tts.provider) && (tts.voiceId || (SERVER.tts && SERVER.tts[tts.provider] && SERVER.tts[tts.provider].voice))) {
+      await generateVoices({ tts, tts2, onProgress: (d, t) => { step(2, `내 목소리 ${d}/${t} 장면`); $('voice-bar').style.width = `${(d / t) * 100}%`; } });
       store.set('script', SCRIPT); renderCost();
-    } else step(2, '목소리 ID가 없어 음성은 건너뜁니다');
+    } else step(2, `${TTS_NAMES[tts.provider]} 키나 목소리가 없어 음성은 건너뜁니다`);
     step(3, '검수 중…');
     await doQA();
     step(4, 'MP4 렌더를 대기열에 넣는 중…');
@@ -503,7 +636,7 @@ async function queueTopics() {
   $('btn-queue').disabled = true;
   try {
     const r = await api('/api/jobs', jobBody({
-      topics, tone: selectedCard().id, length: $('length').value, voiceId: $('voice-id').value.trim(),
+      topics, tone: selectedCard().id, length: $('length').value, tts: currentTTS(), tts2: currentTTS2(),
       source: $('source').value.trim(), channel: $('channel').value.trim(), url: $('url').value.trim(),
       lessons: store.get('lessons', []), withVoice: $('queue-voice').checked, upload: $('queue-upload').checked, fonts: currentFonts(),
     }));
@@ -530,7 +663,7 @@ async function pollJobs() {
     if (j.status === 'running') pre.textContent = `${STEP_NAMES[j.step] || '준비'} ${j.progress ?? 0}%`;
     else if (j.status === 'done') {
       const cp = j.cost ? priceOf(j.cost) : null;
-      pre.textContent = [`${(j.duration || 0).toFixed(1)}초`, j.qaSummary ? `검수 ${j.qaSummary}` : '', cp ? `비용 ${fmtUsd(cp.usd)} ≈ ${fmtKrw(cp.krw)} (Claude ${fmtUsd(cp.claudeUsd)} · 음성 ${fmtNum(cp.credits)}크레딧)` : '', ...(j.log || []).filter((l) => !l.startsWith('비용:'))].filter(Boolean).join('\n');
+      pre.textContent = [`${(j.duration || 0).toFixed(1)}초`, j.qaSummary ? `검수 ${j.qaSummary}` : '', cp ? `비용 ${fmtUsd(cp.usd)} ≈ ${fmtKrw(cp.krw)} (Claude ${fmtUsd(cp.claudeUsd)} · 음성 ${fmtNum(cp.chars)}자 ${fmtUsd(cp.ttsUsd)})` : '', ...(j.log || []).filter((l) => !l.startsWith('비용:'))].filter(Boolean).join('\n');
     }
     else if (j.status === 'error') pre.textContent = j.error;
     li.appendChild(pre);
@@ -559,7 +692,7 @@ const UI = {
     Object.entries(LENGTHS).forEach(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v.label; $('length').appendChild(o); });
     $('length').value = store.get('length', 'standard');
     $('length').onchange = () => store.set('length', $('length').value);
-    ['channel', 'url', 'voice-id', 'source', 'topic'].forEach((id) => {
+    ['channel', 'url', 'source', 'topic'].forEach((id) => {
       $(id).value = store.get('f.' + id, id === 'channel' ? (META().channel || '') : '');
       $(id).addEventListener('change', () => store.set('f.' + id, $(id).value));
     });
@@ -571,14 +704,19 @@ const UI = {
     if (META().tone !== tone) { const s = JSON.parse(JSON.stringify(SCRIPT)); s.meta.tone = tone; loadScript(s); }
     renderTones();
     renderLessons();
-    $('font-head').onchange = chooseFonts;
-    $('font-body').onchange = chooseFonts;
+    FONT_ROLES.forEach((r) => { $('font-' + r).onchange = chooseFonts; });
+    $('font-search').oninput = renderFontSelects;
+    $('font-ko-only').onchange = renderFontSelects;
     $('btn-fonts-rescan').onclick = async () => { status('font-status', '찾는 중…'); await loadUserFonts(true); renderFontSelects(); };
     $('font-file').onchange = (e) => { addFontFiles([...e.target.files]); e.target.value = ''; };
     loadUserFonts().then(async () => {
       renderFontSelects();
       const f = currentFonts();
-      if (f) { await ensureFonts([f.head, f.body]); if (!META().fonts) { const s = JSON.parse(JSON.stringify(SCRIPT)); s.meta.fonts = f; loadScript(s); } }
+      if (f) {
+        await Promise.all(FONT_ROLES.map((r) => ensureGoogleFont(f[r])));
+        if (!META().fonts) { const s = JSON.parse(JSON.stringify(SCRIPT)); s.meta.fonts = f; loadScript(s); }
+      }
+      await ensureScriptFonts([FONT_HEAD, FONT_BODY, FONT_CAPTION, FONT_NUM]);
     });
     if (!HEADLESS) restoreVoices().then((n) => { if (n) status('voice-status', `저장해 둔 음성 ${n}개를 불러왔습니다.`); });
 
@@ -606,6 +744,7 @@ const UI = {
     $('btn-qa').onclick = doQA;
     $('btn-mp4').onclick = renderMP4;
     $('btn-all').onclick = makeAll;
+    initVoicePickers();
     Object.entries(CARTESIA_PLANS).forEach(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v.label; $('c-plan').appendChild(o); });
     $('c-plan').onchange = () => { $('c-per1k-wrap').hidden = $('c-plan').value !== 'custom'; };
     ['topic', 'length', 'source'].forEach((id) => $(id).addEventListener('input', updateEstimate));
@@ -626,6 +765,10 @@ const UI = {
     $('btn-settings').onclick = () => {
       const s = settings();
       $('k-anthropic').value = s.anthropicKey || ''; $('k-cartesia').value = s.cartesiaKey || '';
+      const tk = s.ttsKeys || {}, tr = s.ttsRates || {};
+      $('k-elevenlabs').value = tk.elevenlabs || ''; $('k-openai').value = tk.openai || ''; $('k-google').value = tk.google || '';
+      $('k-clova-id').value = tk.clovaId || ''; $('k-clova-secret').value = tk.clovaSecret || '';
+      ['elevenlabs', 'openai', 'google', 'clova'].forEach((k) => { $('r-' + k).value = tr[k] ?? ''; });
       $('c-model').value = s.cartesiaModel || ''; $('c-version').value = s.cartesiaVersion || '';
       $('c-plan').value = s.cartesiaPlan || 'pro'; $('c-per1k').value = s.cartesiaPer1k || ''; $('c-mult').value = s.creditMult || '1'; $('krw').value = s.krwRate || '1400';
       $('c-per1k-wrap').hidden = $('c-plan').value !== 'custom';
@@ -636,6 +779,8 @@ const UI = {
       store.set('settings', {
         anthropicKey: $('k-anthropic').value.trim(), cartesiaKey: $('k-cartesia').value.trim(), cartesiaModel: $('c-model').value.trim(), cartesiaVersion: $('c-version').value.trim(),
         cartesiaPlan: $('c-plan').value, cartesiaPer1k: $('c-per1k').value.trim(), creditMult: $('c-mult').value.trim(), krwRate: $('krw').value.trim(),
+        ttsKeys: { elevenlabs: $('k-elevenlabs').value.trim(), openai: $('k-openai').value.trim(), google: $('k-google').value.trim(), clovaId: $('k-clova-id').value.trim(), clovaSecret: $('k-clova-secret').value.trim() },
+        ttsRates: Object.fromEntries(['elevenlabs', 'openai', 'google', 'clova'].map((k) => [k, $('r-' + k).value.trim()]).filter(([, v]) => v !== '')),
       });
       renderCost(); updateEstimate();
       dlg.close(); checkServer();

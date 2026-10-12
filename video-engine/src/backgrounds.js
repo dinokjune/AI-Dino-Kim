@@ -198,7 +198,7 @@ function drawCaptionStyled(lines, k, size) {
     noStroke(); fill(0); rect(0, 0, W, 90); rect(0, H - 150, W, 150);
     size *= 0.78; baseY = H - 75 - (lines.length - 1) * size * 1.25;
   }
-  const font = style === 'mono' ? 'Nanum Gothic Coding' : style === 'cinema' ? FONT_BODY : FONT_HEAD;
+  const font = style === 'mono' ? 'Nanum Gothic Coding' : style === 'cinema' && !FONT_CAPTION ? FONT_BODY : capFont();
   textFont(font); textStyle(HEAD_BOLD.includes(font) ? BOLD : NORMAL); textSize(size);
   textAlign(LEFT, CENTER); strokeJoin(ROUND);
   if (style === 'mono') lines = lines.map((ln, i) => (i === 0 ? [{ w: '> ', hi: false }, ...ln] : ln));

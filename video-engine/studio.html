@@ -121,15 +121,25 @@
       <div class="tones" id="tones"></div>
       <div class="card-detail" id="card-detail"></div>
       <div class="card-detail">
-        <h3>내 글꼴</h3>
-        <p class="hint" style="margin:4px 0 8px">내 컴퓨터의 <b>다운로드 폴더</b>와 <code>video-engine/fonts</code> 폴더에서 글꼴을 찾습니다. .ttf .otf .woff .woff2 파일과 zip으로 받은 글꼴 안의 파일까지 읽습니다. 고르면 모든 톤에 적용되고, MP4 렌더와 자동 제작에도 같이 쓰입니다.</p>
+        <h3>글꼴</h3>
+        <p class="hint" style="margin:4px 0 8px">제목·자막·본문·숫자 글꼴을 따로 고를 수 있습니다. <b>Google Fonts 한글 글꼴</b>, <b>내 컴퓨터에 설치된 글꼴</b>, <b>다운로드 폴더</b>와 <code>video-engine/fonts</code> 폴더의 글꼴(zip 안 포함)이 모두 목록에 나오고, 고른 글꼴은 모든 톤과 MP4 렌더·자동 제작에 그대로 쓰입니다.</p>
         <div class="row">
-          <div class="fill"><label class="f" for="font-head">제목 · 자막 글꼴</label><select id="font-head"></select></div>
-          <div class="fill"><label class="f" for="font-body">본문 글꼴</label><select id="font-body"></select></div>
+          <input type="text" id="font-search" class="fill" placeholder="글꼴 이름 검색 (예: 나눔, Noto, 손글씨)">
+          <label class="chk"><input type="checkbox" id="font-ko-only" checked> 한글 지원만</label>
         </div>
-        <div id="font-preview" style="margin-top:12px; background:#15110d; border-radius:10px; padding:14px; line-height:1.4">
-          <div id="fp-head" style="font-size:30px">회의록, 5분이면 끝 ABC 123</div>
-          <div id="fp-body" style="font-size:16px; color:var(--muted); margin-top:6px">본문과 설명 문장은 이 글꼴로 보입니다. 가나다라마바사</div>
+        <div class="row">
+          <div class="fill"><label class="f" for="font-head">제목 글꼴</label><select id="font-head"></select></div>
+          <div class="fill"><label class="f" for="font-caption">자막 글꼴</label><select id="font-caption"></select></div>
+        </div>
+        <div class="row">
+          <div class="fill"><label class="f" for="font-body">본문 글꼴</label><select id="font-body"></select></div>
+          <div class="fill"><label class="f" for="font-number">숫자 글꼴</label><select id="font-number"></select></div>
+        </div>
+        <div id="font-preview" style="margin-top:12px; background:#15110d; border-radius:10px; padding:14px; line-height:1.45">
+          <div id="fp-head" style="font-size:30px">제목: 회의록, 5분이면 끝</div>
+          <div id="fp-caption" style="font-size:22px; margin-top:4px; color:#fff; -webkit-text-stroke: 0.6px #000">자막: 결정, 기한, 담당만 채우면 됩니다.</div>
+          <div id="fp-body" style="font-size:16px; color:var(--muted); margin-top:6px">본문: 설명 문장은 이 글꼴로 보입니다. 가나다라마바사</div>
+          <div id="fp-number" style="font-size:34px; margin-top:4px; color:var(--accent)">1,938 · 27.5% · 3가지</div>
         </div>
         <div class="row" style="margin-top:10px">
           <button class="b" id="btn-fonts-rescan">글꼴 다시 찾기</button>
@@ -179,10 +189,25 @@
     </section>
 
     <section class="step">
-      <h2><span class="n">3</span>내 목소리 입히기</h2>
-      <p class="hint">Cartesia에서 클론한 내 목소리로 장면마다 내레이션을 만들고, 단어별 시간표에 맞춰 자막과 장면 길이를 자동으로 맞춥니다.</p>
-      <label class="f" for="voice-id">Cartesia 목소리 ID</label>
-      <input type="text" id="voice-id" placeholder="play.cartesia.ai → My Voices → 목소리 선택 → ID 복사">
+      <h2><span class="n">3</span>목소리 입히기 (TTS)</h2>
+      <p class="hint">TTS 서비스와 목소리를 고르면 장면마다 내레이션을 만들고, 말 길이에 맞춰 자막과 장면 길이를 자동으로 맞춥니다. Cartesia·ElevenLabs는 단어별 시간표로 자막이 말과 딱 맞고, 나머지는 글자 수 비례로 맞춥니다.</p>
+      <div class="row">
+        <div class="fill"><label class="f" for="tts-provider">TTS 서비스</label><select id="tts-provider"></select></div>
+        <div style="flex:0 0 140px"><label class="f" for="tts-speed">속도 <span id="tts-speed-v">1.00</span></label><input type="range" id="tts-speed" min="0.8" max="1.2" step="0.05" value="1" style="width:100%"></div>
+      </div>
+      <label class="f" for="tts-voice">목소리</label>
+      <div class="row"><select id="tts-voice" class="fill"></select><button class="b" id="btn-voices">목록 불러오기</button></div>
+      <input type="text" id="voice-id" placeholder="또는 목소리 ID 직접 입력 (클론 목소리 등)" style="margin-top:8px">
+      <div class="hint" id="tts-note" style="margin:6px 0 0"></div>
+      <details id="tts2-box">
+        <summary>디노 말풍선 장면은 다른 목소리로 (대화처럼)</summary>
+        <label class="chk" style="margin-top:8px"><input type="checkbox" id="tts2-on"> 말풍선 장면에 두 번째 목소리 쓰기</label>
+        <div class="row">
+          <div class="fill"><label class="f" for="tts2-provider">TTS 서비스</label><select id="tts2-provider"></select></div>
+          <div class="fill"><label class="f" for="tts2-voice">목소리</label><select id="tts2-voice"></select></div>
+        </div>
+        <div class="row" style="margin-top:8px"><input type="text" id="voice2-id" class="fill" placeholder="또는 목소리 ID 직접 입력"><button class="b" id="btn-voices2">목록 불러오기</button></div>
+      </details>
       <div class="row" style="margin-top:10px">
         <button class="b primary" id="btn-voice">모든 장면 음성 만들기</button>
         <button class="b" id="btn-voice-clear">음성 지우기</button>
@@ -250,6 +275,13 @@
   <p class="hint">키는 이 브라우저에만 저장되고, 이 컴퓨터에서 돌아가는 스튜디오 서버로만 전송됩니다. 서버의 .env에 키를 넣었다면 비워 두세요.</p>
   <label class="f" for="k-anthropic">Anthropic API 키</label><input type="password" id="k-anthropic" autocomplete="off">
   <label class="f" for="k-cartesia">Cartesia API 키</label><input type="password" id="k-cartesia" autocomplete="off">
+  <label class="f" for="k-elevenlabs">ElevenLabs API 키</label><input type="password" id="k-elevenlabs" autocomplete="off">
+  <label class="f" for="k-openai">OpenAI API 키 (TTS용)</label><input type="password" id="k-openai" autocomplete="off">
+  <label class="f" for="k-google">Google Cloud API 키 (Text-to-Speech 사용 설정)</label><input type="password" id="k-google" autocomplete="off">
+  <div class="row">
+    <div class="fill"><label class="f" for="k-clova-id">네이버 클로바 Client ID</label><input type="password" id="k-clova-id" autocomplete="off"></div>
+    <div class="fill"><label class="f" for="k-clova-secret">Client Secret</label><input type="password" id="k-clova-secret" autocomplete="off"></div>
+  </div>
   <div class="row">
     <div class="fill"><label class="f" for="c-model">Cartesia 모델</label><input type="text" id="c-model" placeholder="서버 기본값"></div>
     <div class="fill"><label class="f" for="c-version">Cartesia-Version</label><input type="text" id="c-version" placeholder="서버 기본값"></div>
@@ -259,6 +291,13 @@
   <div class="row">
     <div class="fill"><label class="f" for="c-plan">Cartesia 요금제</label><select id="c-plan"></select></div>
     <div class="fill" id="c-per1k-wrap" hidden><label class="f" for="c-per1k">1,000크레딧당 달러</label><input type="text" id="c-per1k" placeholder="예: 0.04"></div>
+  </div>
+  <label class="f">다른 TTS의 1,000자당 달러 (비워 두면 기본값)</label>
+  <div class="row">
+    <div class="fill"><label class="f" for="r-elevenlabs">ElevenLabs</label><input type="text" id="r-elevenlabs" placeholder="0.22"></div>
+    <div class="fill"><label class="f" for="r-openai">OpenAI</label><input type="text" id="r-openai" placeholder="0.015"></div>
+    <div class="fill"><label class="f" for="r-google">Google</label><input type="text" id="r-google" placeholder="목소리별 자동"></div>
+    <div class="fill"><label class="f" for="r-clova">클로바</label><input type="text" id="r-clova" placeholder="요금표 확인"></div>
   </div>
   <div class="row">
     <div class="fill"><label class="f" for="c-mult">크레딧 배수 (클론 목소리 추가 과금 시)</label><input type="text" id="c-mult" placeholder="1"></div>

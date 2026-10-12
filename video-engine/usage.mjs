@@ -37,7 +37,7 @@ export function createLedger(outDir) {
     summary() {
       const lines = fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').filter(Boolean) : [];
       const month = new Date().toISOString().slice(0, 7);
-      const blank = () => ({ claudeUsd: 0, claudeIn: 0, claudeOut: 0, claudeCalls: 0, ttsChars: 0, ttsCalls: 0 });
+      const blank = () => ({ claudeUsd: 0, claudeIn: 0, claudeOut: 0, claudeCalls: 0, ttsChars: 0, ttsCalls: 0, ttsBy: {} });
       const sum = { month: blank(), all: blank() };
       const recent = [];
       for (const l of lines) {
@@ -45,7 +45,7 @@ export function createLedger(outDir) {
         for (const k of e.ts.startsWith(month) ? ['month', 'all'] : ['all']) {
           const s = sum[k];
           if (e.kind === 'claude') { s.claudeUsd += e.usd || 0; s.claudeIn += e.tokens?.input || 0; s.claudeOut += e.tokens?.output || 0; s.claudeCalls++; }
-          if (e.kind === 'tts') { s.ttsChars += e.chars || 0; s.ttsCalls++; }
+          if (e.kind === 'tts') { s.ttsChars += e.chars || 0; s.ttsCalls++; const p = e.provider || 'cartesia'; s.ttsBy[p] = (s.ttsBy[p] || 0) + (e.chars || 0); }
         }
         recent.push(e);
       }

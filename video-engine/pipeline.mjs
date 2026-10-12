@@ -27,7 +27,9 @@ if (!args.topic && !args.topics) {
   console.log(`사용법:
   node pipeline.mjs --topic "주제" [--tone stage] [--length standard|shorts|long] [--voice <Cartesia 목소리 ID>]
                     [--source 참고자료.txt] [--channel "채널 이름"] [--url "채널 주소"] [--no-voice] [--upload]
-                    [--font-head "글꼴 이름"] [--font-body "글꼴 이름"]   (다운로드·fonts 폴더의 파일 이름, 확장자 제외)
+                    [--tts cartesia|elevenlabs|openai|google|clova] [--voice <목소리 ID>] [--speed 1.0]
+                    [--font-head "글꼴"] [--font-caption "글꼴"] [--font-body "글꼴"] [--font-number "글꼴"]
+                    (글꼴: Google Fonts 이름, 설치된 글꼴 이름, 다운로드·fonts 폴더의 파일 이름)
   node pipeline.mjs --topics topics.txt [--count 1] ...   (파일에서 앞에서부터 count개를 처리)
 톤: stage neon flat minimal cinema chalk blueprint pastel news docu terminal`);
   process.exit(1);
@@ -56,7 +58,9 @@ for (const topic of topics) {
       topic, tone: args.tone || 'stage', length: args.length || 'standard', voiceId: args.voice || process.env.CARTESIA_VOICE_ID || '',
       source: args.source ? fs.readFileSync(String(args.source), 'utf8') : '', channel: args.channel || '', url: args.url || '',
       lessons, withVoice: !args['no-voice'],
-      fonts: args['font-head'] || args['font-body'] ? { head: args['font-head'] || '', body: args['font-body'] || '' } : null,
+      fonts: ['font-head', 'font-caption', 'font-body', 'font-number'].some((k) => args[k])
+        ? { head: args['font-head'] || '', caption: args['font-caption'] || '', body: args['font-body'] || '', number: args['font-number'] || '' } : null,
+      tts: args.tts ? { provider: String(args.tts), voiceId: args.voice ? String(args.voice) : '', speed: Number(args.speed) || 1 } : null,
     },
   });
 }
@@ -79,9 +83,13 @@ for (const j of jobs) {
     console.log(`  검수: ${j.qaSummary || '-'}`);
     (j.qa || []).filter((r) => r.level !== 'pass').forEach((r) => console.log(`    ${r.level === 'fail' ? '✗' : '!'} ${r.title}`));
     if (j.cost) {
-      const c = j.cost, rate = Number(process.env.CARTESIA_USD_PER_1K || 0.05) / 1000, krw = Number(process.env.KRW_RATE || 1400);
-      const usd = c.claude.usd + c.tts.chars * rate;
-      console.log(`  비용: Claude $${c.claude.usd.toFixed(4)} (입력 ${c.claude.input} · 출력 ${c.claude.output} 토큰) + 음성 ${c.tts.chars}크레딧($${(c.tts.chars * rate).toFixed(4)}) = $${usd.toFixed(4)} ≈ ₩${Math.round(usd * krw).toLocaleString('ko-KR')}`);
+      // 1,000자당 달러: CARTESIA_USD_PER_1K 등 <공급자>_USD_PER_1K 환경 변수, 없으면 공개 요금 기준 기본값
+      const DEF = { cartesia: 0.05, elevenlabs: 0.22, openai: 0.015, google: 0.016, clova: 0 };
+      const c = j.cost, krw = Number(process.env.KRW_RATE || 1400);
+      const by = c.tts.by && Object.keys(c.tts.by).length ? c.tts.by : { cartesia: c.tts.chars };
+      const ttsUsd = Object.entries(by).reduce((a, [k, n]) => a + (n / 1000) * Number(process.env[`${k.toUpperCase()}_USD_PER_1K`] ?? DEF[k] ?? 0), 0);
+      const usd = c.claude.usd + ttsUsd;
+      console.log(`  비용: Claude $${c.claude.usd.toFixed(4)} (입력 ${c.claude.input} · 출력 ${c.claude.output} 토큰) + 음성 ${Object.entries(by).map(([k, n]) => `${k} ${n}자`).join(', ')}($${ttsUsd.toFixed(4)}) = $${usd.toFixed(4)} ≈ ₩${Math.round(usd * krw).toLocaleString('ko-KR')}`);
     }
     if (j.youtube) console.log(`  유튜브(비공개): ${j.youtube.url}`);
     (j.log || []).filter((l) => !l.startsWith('비용:')).forEach((l) => console.log(`  · ${l}`));

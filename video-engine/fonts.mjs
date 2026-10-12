@@ -72,6 +72,97 @@ function readZipEntry(file, e) {
   } finally { fs.closeSync(fd); }
 }
 
+// ── 글꼴 파일 해석: 이름(name 표)과 한글 지원 여부(cmap 표) ──
+const infoCache = new Map();
+function readAt(fd, pos, len) { const b = Buffer.alloc(len); fs.readSync(fd, b, 0, len, pos); return b; }
+
+export function fontInfo(file) {
+  let st; try { st = fs.statSync(file); } catch { return null; }
+  const c = infoCache.get(file);
+  if (c && c.mtime === st.mtimeMs) return c.info;
+  let info = null;
+  const fd = fs.openSync(file, 'r');
+  try {
+    let base = 0;
+    const head = readAt(fd, 0, 12);
+    const tag = head.toString('latin1', 0, 4);
+    if (tag === 'ttcf') base = readAt(fd, 12, 4).readUInt32BE(0); // 글꼴 모음은 첫 글꼴만 본다
+    else if (tag === 'wOFF' || tag === 'wOF2') throw new Error('압축 글꼴');
+    const dir = readAt(fd, base, 12);
+    const n = dir.readUInt16BE(4);
+    const recs = readAt(fd, base + 12, n * 16);
+    const tables = {};
+    for (let i = 0; i < n; i++) tables[recs.toString('latin1', i * 16, i * 16 + 4)] = { off: recs.readUInt32BE(i * 16 + 8), len: recs.readUInt32BE(i * 16 + 12) };
+    const names = {};
+    if (tables.name && tables.name.len < 2_000_000) {
+      const t = readAt(fd, tables.name.off, tables.name.len);
+      const count = t.readUInt16BE(2), strOff = t.readUInt16BE(4);
+      for (let i = 0; i < count; i++) {
+        const r = 6 + i * 12;
+        const pid = t.readUInt16BE(r), lang = t.readUInt16BE(r + 4), nid = t.readUInt16BE(r + 6), len = t.readUInt16BE(r + 8), off = t.readUInt16BE(r + 10);
+        if (![1, 2, 4, 16].includes(nid) || pid !== 3) continue;
+        const raw = t.subarray(strOff + off, strOff + off + len);
+        const str = Buffer.from(raw).swap16().toString('utf16le');
+        const key = `${nid}:${lang === 0x0412 ? 'ko' : lang === 0x0409 ? 'en' : 'x'}`;
+        if (!names[key]) names[key] = str;
+      }
+    }
+    let hangul = false;
+    if (tables.cmap && tables.cmap.len < 20_000_000) {
+      const t = readAt(fd, tables.cmap.off, tables.cmap.len);
+      const num = t.readUInt16BE(2);
+      const CP = 0xac00; // '가'
+      for (let i = 0; i < num && !hangul; i++) {
+        const pid = t.readUInt16BE(4 + i * 8), eid = t.readUInt16BE(6 + i * 8), off = t.readUInt32BE(8 + i * 8);
+        if (!(pid === 0 || (pid === 3 && (eid === 1 || eid === 10)))) continue;
+        const fmt = t.readUInt16BE(off);
+        if (fmt === 4) {
+          const segX2 = t.readUInt16BE(off + 6), ends = off + 14, starts = ends + segX2 + 2;
+          for (let k = 0; k < segX2 / 2; k++) if (t.readUInt16BE(ends + k * 2) >= CP) { hangul = t.readUInt16BE(starts + k * 2) <= CP; break; }
+        } else if (fmt === 12) {
+          const groups = t.readUInt32BE(off + 12);
+          for (let k = 0; k < groups; k++) { const g = off + 16 + k * 12; if (t.readUInt32BE(g) <= CP && t.readUInt32BE(g + 4) >= CP) { hangul = true; break; } }
+        }
+      }
+    }
+    const family = names['16:en'] || names['1:en'] || names['16:x'] || names['1:x'] || '';
+    const display = names['4:ko'] || names['16:ko'] || names['1:ko'] || names['4:en'] || family;
+    const style = names['2:en'] || '';
+    info = { family, display, style, hangul };
+  } catch { info = null; } finally { fs.closeSync(fd); }
+  infoCache.set(file, { mtime: st.mtimeMs, info });
+  return info;
+}
+
+// 운영체제에 설치된 글꼴 폴더
+function systemFontDirs() {
+  if (process.env.SYSTEM_FONTS === '0') return [];
+  const h = os.homedir();
+  if (process.platform === 'win32') return [path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts'), path.join(process.env.LOCALAPPDATA || path.join(h, 'AppData', 'Local'), 'Microsoft', 'Windows', 'Fonts')];
+  if (process.platform === 'darwin') return ['/Library/Fonts', path.join(h, 'Library', 'Fonts'), '/System/Library/Fonts', '/System/Library/Fonts/Supplemental'];
+  return ['/usr/share/fonts', '/usr/local/share/fonts', path.join(h, '.local', 'share', 'fonts'), path.join(h, '.fonts')];
+}
+
+// 설치된 글꼴은 운영체제가 이미 알고 있으므로 파일을 보내지 않고 글꼴 이름으로 바로 쓴다 (브라우저·헤드리스 렌더 모두)
+export function scanSystemFonts() {
+  const out = new Map();
+  const visit = (dir, depth) => {
+    let items = [];
+    try { items = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const it of items) {
+      const full = path.join(dir, it.name);
+      if (it.isDirectory() && depth < 3) visit(full, depth + 1);
+      else if (it.isFile() && /\.(ttf|otf|ttc)$/i.test(it.name)) {
+        const info = fontInfo(full);
+        if (!info || !info.family || out.has(info.family)) continue;
+        out.set(info.family, { family: info.family, display: info.display || info.family, hangul: info.hangul, source: '설치된 글꼴', system: true });
+      }
+    }
+  };
+  systemFontDirs().forEach((d) => visit(d, 0));
+  return [...out.values()].sort((a, b) => (b.hangul - a.hangul) || a.display.localeCompare(b.display, 'ko'));
+}
+
 // ── 글꼴 목록 ──
 const INDEX = new Map(); // id → { file, entry, ext }
 
@@ -89,7 +180,8 @@ export function scanFonts(root) {
     seen.add(family);
     const ext = path.extname(entry ? entry.name : file).toLowerCase();
     INDEX.set(id, { file, entry, ext });
-    fonts.push({ id, family, url: `/userfonts/${id}${ext}`, source: label, size });
+    const info = entry ? null : fontInfo(file);
+    fonts.push({ id, family, display: (info && info.display) || family, hangul: info ? info.hangul : null, url: `/userfonts/${id}${ext}`, source: label, size });
   };
   const visit = (dir, label, depth) => {
     let items = [];

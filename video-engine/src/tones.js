@@ -306,6 +306,8 @@ TONES.dark = TONES.neon; // 이전 대본 호환
 
 let FONT_HEAD = 'Jua';
 let FONT_BODY = 'Gowun Dodum';
+let FONT_CAPTION = null; // 비어 있으면 제목 글꼴
+let FONT_NUM = null;     // 비어 있으면 제목 글꼴
 let PAL = TONES.stage;
 let TONE = TONE_CARDS[0];
 
@@ -314,14 +316,19 @@ function setTone(id) {
   PAL = TONES[TONE.id];
   FONT_HEAD = TONE.engine.fontHead;
   FONT_BODY = TONE.engine.fontBody;
+  FONT_CAPTION = null; FONT_NUM = null;
 }
 
-// 내 글꼴로 바꾸기: { head: 제목·자막 글꼴, body: 본문 글꼴 } (비어 있으면 톤 기본값)
+// 글꼴 바꾸기: { head: 제목, caption: 자막, body: 본문, number: 숫자 } (비어 있으면 톤 기본값)
 function applyFontOverride(f) {
   if (!f) return;
   if (f.head) FONT_HEAD = f.head;
   if (f.body) FONT_BODY = f.body;
+  if (f.caption) FONT_CAPTION = f.caption;
+  if (f.number) FONT_NUM = f.number;
 }
+const capFont = () => FONT_CAPTION || FONT_HEAD;
+const numFont = () => FONT_NUM || FONT_HEAD;
 
 // 대본 생성 프롬프트에 넣을 톤 카드 텍스트
 function toneCardText(card) {

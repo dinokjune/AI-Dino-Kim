@@ -11,8 +11,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
-import { scanFonts, serveFont, saveFont } from './fonts.mjs';
+import { scanFonts, serveFont, saveFont, scanSystemFonts } from './fonts.mjs';
 import { claudeCost, createLedger, loadJobs, saveJobs } from './usage.mjs';
+import { PROVIDERS, providerKey, providerStatus } from './tts.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 loadDotEnv(path.join(ROOT, '.env'));
@@ -20,7 +21,6 @@ loadDotEnv(path.join(ROOT, '.env'));
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-opus-5-5';
-const CARTESIA_URL = process.env.CARTESIA_BASE_URL || 'https://api.cartesia.ai';
 const CARTESIA_VERSION = process.env.CARTESIA_VERSION || '2024-11-13';
 const CARTESIA_MODEL = process.env.CARTESIA_MODEL || 'sonic-3';
 
@@ -85,96 +85,34 @@ async function handleClaude(req, res) {
   }
 }
 
-// ── Cartesia: 내레이션 ──
-function cartesiaHeaders(key, version) {
-  return { 'Content-Type': 'application/json', 'X-API-Key': key, Authorization: `Bearer ${key}`, 'Cartesia-Version': version };
-}
-
-function wavFromFloat32(samples, sampleRate) {
-  const buf = Buffer.alloc(44 + samples.length * 2);
-  buf.write('RIFF', 0); buf.writeUInt32LE(36 + samples.length * 2, 4); buf.write('WAVE', 8);
-  buf.write('fmt ', 12); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22);
-  buf.writeUInt32LE(sampleRate, 24); buf.writeUInt32LE(sampleRate * 2, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34);
-  buf.write('data', 36); buf.writeUInt32LE(samples.length * 2, 40);
-  for (let i = 0; i < samples.length; i++) buf.writeInt16LE(Math.round(Math.max(-1, Math.min(1, samples[i])) * 32767), 44 + i * 2);
-  return buf;
-}
-
-async function ttsSSE({ key, version, model, voiceId, text, language }) {
-  const sampleRate = 44100;
-  const r = await fetch(`${CARTESIA_URL}/tts/sse`, {
-    method: 'POST',
-    headers: cartesiaHeaders(key, version),
-    body: JSON.stringify({
-      model_id: model, transcript: text, voice: { mode: 'id', id: voiceId }, language,
-      output_format: { container: 'raw', encoding: 'pcm_f32le', sample_rate: sampleRate },
-      add_timestamps: true,
-    }),
-  });
-  if (!r.ok) throw new Error(`Cartesia SSE ${r.status}: ${(await r.text()).slice(0, 300)}`);
-  const pcm = []; const words = [];
-  let pending = '';
-  const handle = (block) => {
-    const data = block.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim()).join('');
-    if (!data) return;
-    let ev; try { ev = JSON.parse(data); } catch { return; }
-    if (ev.type === 'error' || ev.error) throw new Error(`Cartesia: ${ev.error || ev.message || 'error'}`);
-    if (ev.type === 'chunk' && ev.data) pcm.push(Buffer.from(ev.data, 'base64'));
-    const wt = ev.word_timestamps;
-    if (wt && wt.words) wt.words.forEach((w, i) => words.push({ w, start: wt.start[i], end: wt.end[i] }));
-  };
-  const decoder = new TextDecoder();
-  for await (const chunk of r.body) {
-    pending += decoder.decode(chunk, { stream: true });
-    let idx;
-    while ((idx = pending.search(/\r?\n\r?\n/)) >= 0) {
-      handle(pending.slice(0, idx));
-      pending = pending.slice(idx).replace(/^\r?\n\r?\n/, '');
-    }
-  }
-  if (pending.trim()) handle(pending);
-  const raw = Buffer.concat(pcm);
-  const f32 = new Float32Array(raw.buffer, raw.byteOffset, Math.floor(raw.length / 4));
-  if (!f32.length) throw new Error('Cartesia SSE에서 오디오를 받지 못했습니다');
-  return { wav: wavFromFloat32(f32, sampleRate), words, duration: f32.length / sampleRate };
-}
-
-async function ttsBytes({ key, version, model, voiceId, text, language }) {
-  const r = await fetch(`${CARTESIA_URL}/tts/bytes`, {
-    method: 'POST',
-    headers: cartesiaHeaders(key, version),
-    body: JSON.stringify({
-      model_id: model, transcript: text, voice: { mode: 'id', id: voiceId }, language,
-      output_format: { container: 'wav', encoding: 'pcm_s16le', sample_rate: 44100 },
-    }),
-  });
-  if (!r.ok) throw new Error(`Cartesia bytes ${r.status}: ${(await r.text()).slice(0, 300)}`);
-  return { wav: Buffer.from(await r.arrayBuffer()), words: [], duration: null };
-}
-
+// ── 내레이션 (TTS 공급자: tts.mjs) ──
 async function handleTTS(req, res) {
   const body = await readBody(req);
-  const key = process.env.CARTESIA_API_KEY || req.headers['x-cartesia-key'];
-  const voiceId = body.voiceId || process.env.CARTESIA_VOICE_ID;
-  if (!key) return send(res, 400, { error: 'Cartesia API 키가 없습니다. .env 또는 설정 화면에서 넣어 주세요.' });
-  if (!voiceId) return send(res, 400, { error: 'Cartesia 목소리 ID가 없습니다 (play.cartesia.ai → My Voices → 목소리 ID 복사)' });
+  const provider = PROVIDERS[body.provider] ? body.provider : 'cartesia';
+  const P = PROVIDERS[provider];
+  const key = providerKey(provider, req);
+  const voiceId = body.voiceId || P.envVoice();
+  if (!key) return send(res, 400, { error: `${P.name} API 키가 없습니다. .env 또는 ⚙ 설정에서 넣어 주세요.` });
+  if (!voiceId) return send(res, 400, { error: `${P.name} 목소리를 골라 주세요.` });
   if (!body.text) return send(res, 400, { error: 'text가 비어 있습니다' });
-  const opts = {
-    key, voiceId, text: body.text, language: body.language || 'ko',
-    version: body.version || CARTESIA_VERSION, model: body.model || CARTESIA_MODEL,
-  };
-  let out, note = null;
+  let out;
   try {
-    out = await ttsSSE(opts);
-  } catch (e1) {
-    // 타임스탬프 경로가 실패하면 단어 시간 없이 WAV만 받는다 (자막은 글자 수 비례로 맞춤)
-    try { out = await ttsBytes(opts); note = `타임스탬프 없이 생성됨: ${e1.message}`; }
-    catch (e2) { return send(res, 502, { error: e2.message, first: e1.message }); }
-  }
-  // Cartesia는 글자당 약 1크레딧 (공식 문서 기준)
-  const chars = [...opts.text].length;
-  LEDGER.add({ kind: 'tts', tag: costTag(req), model: opts.model, chars });
-  return send(res, 200, { audio: out.wav.toString('base64'), words: out.words, duration: out.duration, note, cost: { chars, credits: chars } });
+    out = await P.synth({ key, voiceId, text: body.text, language: body.language || 'ko', model: body.model || '', version: body.version || '', speed: Number(body.speed) || 1 });
+  } catch (e) { return send(res, 502, { error: e.message }); }
+  // 과금 단위는 공급자 모두 글자 수 (Cartesia는 글자당 약 1크레딧)
+  const chars = [...body.text].length;
+  LEDGER.add({ kind: 'tts', tag: costTag(req), provider, model: body.model || '', voice: voiceId, chars });
+  return send(res, 200, { audio: out.audio.toString('base64'), mime: out.mime, words: out.words || [], note: out.note || null, cost: { provider, chars, credits: chars } });
+}
+
+async function handleVoices(req, res) {
+  const provider = new URL(req.url, 'http://x').searchParams.get('provider');
+  const P = PROVIDERS[provider];
+  if (!P) return send(res, 400, { error: '알 수 없는 TTS 공급자' });
+  const key = providerKey(provider, req);
+  if (!key && !['openai', 'clova'].includes(provider)) return send(res, 400, { error: `${P.name} API 키가 있어야 목소리 목록을 불러올 수 있습니다` });
+  try { return send(res, 200, { voices: await P.voices({ key }) }); }
+  catch (e) { return send(res, 502, { error: e.message }); }
 }
 
 // ── 정적 파일 ──
@@ -206,6 +144,7 @@ function publicJob(j) {
 function keysFrom(req, body) {
   return {
     anthropicKey: req.headers['x-anthropic-key'] || '', cartesiaKey: req.headers['x-cartesia-key'] || '',
+    ttsKeys: Object.fromEntries(Object.entries(PROVIDERS).map(([k, p]) => [k, req.headers[p.header] || ''])),
     cartesiaModel: body.cartesiaModel || '', cartesiaVersion: body.cartesiaVersion || '',
   };
 }
@@ -287,7 +226,7 @@ async function handleJobs(req, res) {
   const created = topics.map((topic, i) => ({
     id: 'j' + (Date.now() + i).toString(36), kind: 'auto', title: topic, status: 'queued', createdAt: Date.now(), upload: !!body.upload,
     settings: keysFrom(req, body),
-    payload: { topic, tone: body.tone || 'stage', length: body.length || 'standard', voiceId: body.voiceId || process.env.CARTESIA_VOICE_ID || '', source: body.source || '', channel: body.channel || '', url: body.url || '', lessons: body.lessons || [], withVoice: body.withVoice !== false, fonts: body.fonts || null },
+    payload: { topic, tone: body.tone || 'stage', length: body.length || 'standard', voiceId: body.voiceId || process.env.CARTESIA_VOICE_ID || '', source: body.source || '', channel: body.channel || '', url: body.url || '', lessons: body.lessons || [], withVoice: body.withVoice !== false, fonts: body.fonts || null, tts: body.tts || null, tts2: body.tts2 || null },
   }));
   JOBS.push(...created); runQueue(BASE_URL);
   send(res, 200, { jobs: created.map(publicJob) });
@@ -314,10 +253,11 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, {
         server: true, claudeModel: CLAUDE_MODEL, cartesiaModel: CARTESIA_MODEL, cartesiaVersion: CARTESIA_VERSION,
         claudeKey: !!process.env.ANTHROPIC_API_KEY, cartesiaKey: !!process.env.CARTESIA_API_KEY, voiceId: !!process.env.CARTESIA_VOICE_ID,
+        tts: providerStatus(),
         youtube: !!(process.env.YT_CLIENT_ID && process.env.YT_CLIENT_SECRET && process.env.YT_REFRESH_TOKEN),
       });
     }
-    if (req.method === 'GET' && req.url === '/api/fonts') return send(res, 200, { fonts: scanFonts(ROOT) });
+    if (req.method === 'GET' && req.url === '/api/fonts') return send(res, 200, { fonts: scanFonts(ROOT), system: scanSystemFonts() });
     if (req.method === 'POST' && req.url === '/api/fonts') {
       const b = await readBody(req, 90_000_000);
       try { const name = saveFont(ROOT, b.name, b.data); return send(res, 200, { saved: name, fonts: scanFonts(ROOT) }); }
@@ -330,6 +270,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/api/jobs') return await handleJobs(req, res);
     if (req.method === 'POST' && req.url === '/api/claude') return await handleClaude(req, res);
     if (req.method === 'POST' && req.url === '/api/tts') return await handleTTS(req, res);
+    if (req.method === 'GET' && req.url.startsWith('/api/voices')) return await handleVoices(req, res);
     if (req.method === 'GET') return serveStatic(req, res);
     res.writeHead(405); res.end();
   } catch (e) {

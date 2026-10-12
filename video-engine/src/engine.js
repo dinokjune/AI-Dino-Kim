@@ -10,8 +10,18 @@ const HEADLESS = /[?&]headless=1/.test(location.search);
 const VOICE = {};
 const VOICE_LEAD = 0.3;  // 장면 시작 후 말 시작까지
 const VOICE_TAIL = 0.5;  // 말 끝난 뒤 장면 여유
+// 장면에 쓸 목소리: 장면 지정(s.voice) → 말풍선 장면이면 두 번째 목소리(meta.tts2) → 기본 목소리(meta.tts)
+// (예전 대본의 meta.voiceId 는 Cartesia 목소리로 읽는다)
+function voiceSpec(s) {
+  const m = META();
+  const base = m.tts || { provider: 'cartesia', voiceId: m.voiceId || '' };
+  if (s && s.voice && (s.voice.voiceId || s.voice.id)) return { ...base, ...s.voice, voiceId: s.voice.voiceId || s.voice.id };
+  if (s && s.type === 'bubble' && m.tts2 && m.tts2.voiceId) return m.tts2;
+  return base;
+}
 function voiceKey(s) {
-  const str = stripMarks(s.say || '') + '|' + (META().voiceId || '');
+  const v = voiceSpec(s);
+  const str = stripMarks(s.say || '') + '|' + [v.provider, v.voiceId, v.model || '', v.speed || 1].join('|');
   let h = 0;
   for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
   return 'v' + (h >>> 0).toString(36);
@@ -218,7 +228,7 @@ function drawCaption(e, t) {
   const c = e.caps.find((c) => t >= c.a && t < c.b);
   if (!c) return;
   const size = META().captionSize || 64, maxW = 1580;
-  const font = TONE.engine.caption === 'mono' ? 'Nanum Gothic Coding' : FONT_HEAD;
+  const font = TONE.engine.caption === 'mono' ? 'Nanum Gothic Coding' : capFont();
   textFont(font); textStyle(HEAD_BOLD.includes(font) ? BOLD : NORMAL); textSize(size);
   const toks = parseMarked(c.text), lines = [[]];
   let lw = 0;

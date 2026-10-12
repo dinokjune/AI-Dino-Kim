@@ -174,11 +174,11 @@ SCENES.number = {
     }
     const k = popK(t, 0.45);
     popAt(1180, 430, k, () => {
-      useFont(FONT_HEAD); textSize(260);
+      useFont(numFont()); textSize(260);
       const vw = textWidth(raw + (s.suffix || ''));
       noStroke(); fill(PAL.yellow); rect(-vw / 2 - 50, -150, vw + 100, 290, 60);
       stroke(LINE()); strokeWeight(6); noFill(); rect(-vw / 2 - 50, -150, vw + 100, 290, 60);
-      txt(shown + (s.suffix || ''), 0, 0, 260, PAL.ink);
+      txt(shown + (s.suffix || ''), 0, 0, 260, PAL.ink, { font: numFont() });
     });
     if (s.label) withAlpha(inK(t, 1.0), () => txt(s.label, 1180, 680, 52, subInk(), { font: FONT_BODY }));
   },
@@ -216,7 +216,7 @@ SCENES.funnel = {
         }
       });
       withAlpha(inK(t, ts[i] + 0.2), () => {
-        txt(st.value, cx, cy - 230, 90, titleInk(), { outline: titleOutline(), ow: 12 });
+        txt(st.value, cx, cy - 230, 90, titleInk(), { outline: titleOutline(), ow: 12, font: numFont() });
         txt(st.label || '', cx, cy + 210, 44, subInk(), { font: FONT_BODY });
       });
     });

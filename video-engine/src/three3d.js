@@ -260,7 +260,7 @@ SCENES.three = {
           const base = t3Project(S, new THREE.Vector3(b.m.position.x, 0, 0.75));
           if (!b.m.visible) return;
           withAlpha(inK(t, ts[i] + 0.4), () => {
-            txt(String(b.v.value) + (s.suffix || ''), top.x, top.y - 20, 54, titleInk(), { outline: titleOutline(), ow: 10 });
+            txt(String(b.v.value) + (s.suffix || ''), top.x, top.y - 20, 54, titleInk(), { outline: titleOutline(), ow: 10, font: numFont() });
             txt(b.v.label || '', base.x, base.y + 30, 38, titleInk(), { outline: titleOutline(), ow: 8 });
           });
         });
