@@ -78,8 +78,13 @@ for (const j of jobs) {
     console.log(`  영상: ${path.join('.', j.files.mp4)}  (${(j.duration || 0).toFixed(1)}초)`);
     console.log(`  검수: ${j.qaSummary || '-'}`);
     (j.qa || []).filter((r) => r.level !== 'pass').forEach((r) => console.log(`    ${r.level === 'fail' ? '✗' : '!'} ${r.title}`));
+    if (j.cost) {
+      const c = j.cost, rate = Number(process.env.CARTESIA_USD_PER_1K || 0.05) / 1000, krw = Number(process.env.KRW_RATE || 1400);
+      const usd = c.claude.usd + c.tts.chars * rate;
+      console.log(`  비용: Claude $${c.claude.usd.toFixed(4)} (입력 ${c.claude.input} · 출력 ${c.claude.output} 토큰) + 음성 ${c.tts.chars}크레딧($${(c.tts.chars * rate).toFixed(4)}) = $${usd.toFixed(4)} ≈ ₩${Math.round(usd * krw).toLocaleString('ko-KR')}`);
+    }
     if (j.youtube) console.log(`  유튜브(비공개): ${j.youtube.url}`);
-    (j.log || []).forEach((l) => console.log(`  · ${l}`));
+    (j.log || []).filter((l) => !l.startsWith('비용:')).forEach((l) => console.log(`  · ${l}`));
   } else console.log(`  실패: ${j.error}`);
 }
 

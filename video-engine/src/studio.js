@@ -9,9 +9,11 @@ const settings = () => store.get('settings', {});
 let SERVER = null; // /api/status 결과, 없으면 오프라인
 
 // ── 서버 호출 ──
-async function api(path, body) {
+async function api(path, body, tag) {
   const s = settings();
   const headers = { 'Content-Type': 'application/json' };
+  const t = tag || (SCRIPT && (META().topic || META().title)) || '';
+  if (t) headers['x-cost-tag'] = encodeURIComponent(t);
   if (s.anthropicKey) headers['x-anthropic-key'] = s.anthropicKey;
   if (s.cartesiaKey) headers['x-cartesia-key'] = s.cartesiaKey;
   const r = await fetch(path, { method: 'POST', headers, body: JSON.stringify(body) });
@@ -36,7 +38,7 @@ async function checkServer() {
   $('btn-queue').disabled = !SERVER;
   $('queue-upload').disabled = !(SERVER && SERVER.youtube);
   $('queue-upload').title = SERVER && SERVER.youtube ? '' : '유튜브 업로드 설정(README 참고)을 하면 켤 수 있습니다';
-  if (SERVER) pollJobs();
+  if (SERVER) { pollJobs(); refreshLedger(); }
   if ($('font-head') && userFontsPromise) userFontsPromise.then(renderFontSelects);
   if (!SERVER) status('script-status', '서버 없이 열렸습니다. "프롬프트 복사" → Claude 대화창에 붙여넣기 → 받은 JSON을 "JSON 붙여넣기"로 넣으면 됩니다. 음성 생성은 서버(npm start)가 필요합니다.');
 }
@@ -182,10 +184,11 @@ async function makeScript() {
       ...inp, voiceId: $('voice-id').value.trim(), fonts: currentFonts(),
       onStep: (n) => status('script-status', n ? '근거 없는 숫자나 형식 오류가 있어 한 번 더 쓰는 중…' : `"${inp.topic}" 대본을 쓰는 중… (톤: ${inp.card.name}, 보통 30초~2분)`),
     });
-    curT = 0;
+    curT = firstLook();
     store.set('script', SCRIPT);
     const warn = r.numberIssues.length ? `\n주의: 근거 없는 숫자 ${r.numberIssues.length}개가 남았습니다. 검수에서 확인하세요.` : '';
-    status('script-status', `완료: 장면 ${TL.length}개, 약 ${TOTAL.toFixed(0)}초. 다음은 목소리 입히기입니다.\n${r.log.join(' · ')}${warn}`);
+    status('script-status', `완료: 장면 ${TL.length}개, 약 ${TOTAL.toFixed(0)}초. 대본 비용 ${fmtUsd(r.script.meta.cost.claude.usd)}. 다음은 목소리 입히기입니다.\n${r.log.join(' · ')}${warn}`);
+    refreshLedger();
   } catch (e) {
     status('script-status', '대본 생성 실패: ' + e.message, true);
   } finally { $('btn-script').disabled = !SERVER; }
@@ -261,6 +264,7 @@ async function generateVoices({ voiceId, onProgress } = {}) {
       VOICE[voiceKey(e.s)] = { buffer, duration: buffer.duration, words: r.words || [], wav: r.audio };
       voiceDB.put(voiceKey(e.s), { audio: r.audio, words: r.words || [] });
       if (r.note) notes.push(r.note);
+      addCost(r.cost);
       done++;
       if (onProgress) onProgress(done, total);
     }
@@ -282,6 +286,7 @@ async function makeVoices() {
       onProgress: (d, t) => { bar.style.width = `${(d / t) * 100}%`; status('voice-status', `${d}/${t} 장면 음성 생성 중…`); },
     });
     store.set('script', SCRIPT);
+    refreshLedger();
     status('voice-status', done ? `완료: ${done}개 장면. 영상 길이 ${TOTAL.toFixed(1)}초로 맞췄습니다.` + (notes.length ? `\n참고: ${notes[0]}` : '') : '모든 장면에 이미 음성이 있습니다.');
   } catch (e) {
     status('voice-status', '음성 생성 실패: ' + e.message, true);
@@ -293,16 +298,18 @@ async function makeVoices() {
 // 대본 작성: 형식 오류나 근거 없는 숫자가 나오면 이유를 알려 주고 한 번 다시 쓰게 한다
 async function writeScript({ topic, card, length = 'standard', source = '', lessons = [], channel = '', url = '', voiceId = '', fonts = null, onStep }) {
   const log = [];
+  const run = emptyCost();
   let issues = [], last = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     if (onStep) onStep(attempt);
     const extra = attempt ? ['지난 시도에서 문제가 있었다: ' + issues.join(' / ') + ' → 형식을 지키고, 화면 숫자는 say와 참고 자료에 있는 것만 쓴다'] : [];
-    const r = await api('/api/claude', { prompt: buildScriptPrompt({ topic, card, length, source, lessons: [...lessons, ...extra], channel, url }), maxTokens: 32000 });
+    const r = await api('/api/claude', { prompt: buildScriptPrompt({ topic, card, length, source, lessons: [...lessons, ...extra], channel, url }), maxTokens: 32000 }, topic);
+    addCost(r.cost, run);
     let obj;
     try { obj = extractJSON(r.text); } catch (e) { issues = [e.message]; log.push(`대본 ${attempt + 1}차: JSON 오류`); continue; }
     const errs = validateScript(obj);
     if (errs.length) { issues = errs; log.push(`대본 ${attempt + 1}차: 형식 오류 ${errs.length}개`); continue; }
-    obj.meta = Object.assign({}, obj.meta, { tone: card.id, topic, source, voiceId });
+    obj.meta = Object.assign({}, obj.meta, { tone: card.id, topic, source, voiceId, cost: run });
     if (fonts) obj.meta.fonts = fonts;
     if (channel) obj.meta.channel = channel;
     if (url) obj.meta.url = url;
@@ -312,7 +319,8 @@ async function writeScript({ topic, card, length = 'standard', source = '', less
     log.push(`대본 ${attempt + 1}차: 장면 ${TL.length}개, 근거 없는 숫자 ${issues.length}개`);
     if (!issues.length) break;
   }
-  if (!last) throw new Error('대본을 만들지 못했습니다: ' + issues.slice(0, 3).join(' / '));
+  if (!last) throw new Error('대본을 만들지 못했습니다: ' + issues.slice(0, 3).join(' / ') + ` (이미 쓴 비용 ${fmtUsd(run.claude.usd)})`);
+  rememberTopic(topic);
   return { script: last, log, numberIssues: issues };
 }
 
@@ -327,7 +335,94 @@ async function autopilot({ topic, tone, length = 'standard', voiceId = '', sourc
     log.push(`음성 ${v.done}개 장면` + (v.notes.length ? ` (${v.notes[0]})` : ''));
   }
   const qa = await runQA({ source: source + ' ' + topic });
-  return { script: SCRIPT, qa, log };
+  const cost = SCRIPT.meta.cost || emptyCost();
+  log.push(`비용: Claude ${fmtUsd(cost.claude.usd)} (토큰 ${fmtNum(cost.claude.input)}→${fmtNum(cost.claude.output)}) · 음성 ${fmtNum(cost.tts.chars)}크레딧`);
+  return { script: SCRIPT, qa, log, cost };
+}
+
+// 새 대본을 만든 직후 미리보기 위치: 첫 장면이 다 보이는 시점 (0초는 커튼이 닫혀 있어 빈 화면처럼 보인다)
+function firstLook() { return TL.length ? Math.min(TOTAL - 0.01, TL[0].start + TL[0].d * 0.7) : 0; }
+
+// ── 최근 주제 ──
+function rememberTopic(t) {
+  if (!t) return;
+  const a = [t, ...store.get('recentTopics', []).filter((x) => x !== t)].slice(0, 8);
+  store.set('recentTopics', a);
+  renderRecentTopics();
+}
+function renderRecentTopics() {
+  const box = $('recent-topics'); if (!box) return;
+  box.innerHTML = '';
+  store.get('recentTopics', []).forEach((tp) => {
+    const c = document.createElement('button'); c.className = 'chip'; c.textContent = tp;
+    c.onclick = () => { $('topic').value = tp; store.set('f.topic', tp); updateEstimate(); };
+    box.appendChild(c);
+  });
+  $('recent-wrap').hidden = !store.get('recentTopics', []).length;
+}
+
+// ── 비용 표시 ──
+function updateEstimate() {
+  const el = $('estimate'); if (!el) return;
+  const topic = $('topic').value.trim();
+  const e = estimateNew($('length').value, buildScriptPrompt({ topic: topic || '주제', card: selectedCard(), length: $('length').value, source: $('source').value.trim(), lessons: store.get('lessons', []) }));
+  el.textContent = `예상 비용(대략): 대본 ${fmtUsd(e.claudeLo)}~${fmtUsd(e.claudeHi)} + 음성 약 ${fmtNum(e.credits)}크레딧(${fmtUsd(e.tts)}) ≈ ${fmtKrw(e.krwLo)}~${fmtKrw(e.krwHi)} · 숫자 검문으로 대본을 다시 쓰면 대본 비용이 최대 2배`;
+}
+
+let ledgerCache = null;
+async function refreshLedger() {
+  if (!SERVER) return;
+  try { ledgerCache = await (await fetch('/api/ledger')).json(); } catch (e) {}
+  renderCost();
+}
+
+function renderCost() {
+  const box = $('cost'); if (!box || !SCRIPT) return;
+  const c = SCRIPT.meta.cost || emptyCost();
+  const p = priceOf(c), cs = costSettings();
+  const pend = pendingTtsChars() * cs.creditMult;
+  const rows = [
+    ['대본 (Claude)', c.claude.calls ? `${fmtNum(c.claude.input)} 입력 · ${fmtNum(c.claude.output)} 출력 토큰` : '아직 없음', fmtUsd(p.claudeUsd)],
+    ['음성 (Cartesia)', c.tts.calls ? `${fmtNum(p.credits)} 크레딧` : '아직 없음', fmtUsd(p.ttsUsd)],
+    ['렌더 · 검수', '내 컴퓨터에서 처리', '$0'],
+  ];
+  let html = '<table>' + rows.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('') +
+    `<tr class="sum"><td>이 영상 합계</td><td>${fmtKrw(p.krw)} (환율 ${fmtNum(cs.krw)}원 기준)</td><td>${fmtUsd(p.usd)}</td></tr></table>`;
+  if (pend > 0) html += `<div class="hint" style="margin:8px 0 0">음성을 만들면 약 ${fmtNum(pend)}크레딧(${fmtUsd(pend * cs.usdPerCredit)}, ${fmtKrw(pend * cs.usdPerCredit * cs.krw)})이 더 듭니다.</div>`;
+  if (ledgerCache) {
+    const m = ledgerCache.month;
+    const mUsd = m.claudeUsd + m.ttsChars * cs.creditMult * cs.usdPerCredit;
+    html += `<div class="hint" style="margin:8px 0 0">이번 달(${ledgerCache.monthKey}) 누적: Claude ${fmtUsd(m.claudeUsd)} (${m.claudeCalls}회) · 음성 ${fmtNum(m.ttsChars * cs.creditMult)}크레딧 → 합계 ${fmtUsd(mUsd)} ≈ ${fmtKrw(mUsd * cs.krw)}</div>`;
+  }
+  box.innerHTML = html;
+}
+
+// ── 한 번에 완성: 주제 → 대본 → 내 목소리 → 검수 → MP4 ──
+async function makeAll() {
+  const inp = promptInputs();
+  if (!inp.topic) return status('all-status', '주제를 적거나 아래 추천 주제를 눌러 고르세요.', true);
+  if (!SERVER) return status('all-status', '한 번에 완성은 서버(npm start)에서 동작합니다. 지금은 "프롬프트 복사"를 쓰세요.', true);
+  const voiceId = $('voice-id').value.trim();
+  const btn = $('btn-all'); btn.disabled = true;
+  const step = (n, msg) => status('all-status', `[${n}/4] ${msg}`);
+  try {
+    step(1, `"${inp.topic}" 대본을 쓰는 중… (${inp.card.name} 톤)`);
+    const r = await writeScript({ ...inp, voiceId, fonts: currentFonts(), onStep: (a) => a && step(1, '근거 없는 숫자나 형식 오류가 있어 한 번 더 쓰는 중…') });
+    curT = firstLook(); store.set('script', SCRIPT); renderCost();
+    if (voiceId || (SERVER && SERVER.voiceId)) {
+      await generateVoices({ voiceId, onProgress: (d, t) => { step(2, `내 목소리 ${d}/${t} 장면`); $('voice-bar').style.width = `${(d / t) * 100}%`; } });
+      store.set('script', SCRIPT); renderCost();
+    } else step(2, '목소리 ID가 없어 음성은 건너뜁니다');
+    step(3, '검수 중…');
+    await doQA();
+    step(4, 'MP4 렌더를 대기열에 넣는 중…');
+    await api('/api/render', jobBody({ script: SCRIPT, voices: exportVoices() }));
+    pollJobs();
+    const p = priceOf(SCRIPT.meta.cost || emptyCost());
+    status('all-status', `완료: 대본 ${TL.length}장면 · ${TOTAL.toFixed(0)}초. MP4는 아래 5번 목록에서 받을 수 있습니다.\n이 영상 비용 ${fmtUsd(p.usd)} ≈ ${fmtKrw(p.krw)} (${r.log.join(' · ')})`);
+  } catch (e) {
+    status('all-status', '중단: ' + e.message, true);
+  } finally { btn.disabled = !SERVER; refreshLedger(); }
 }
 
 // ── 4. 검수 ──
@@ -433,7 +528,10 @@ async function pollJobs() {
     li.appendChild(b);
     const pre = document.createElement('pre');
     if (j.status === 'running') pre.textContent = `${STEP_NAMES[j.step] || '준비'} ${j.progress ?? 0}%`;
-    else if (j.status === 'done') pre.textContent = [`${(j.duration || 0).toFixed(1)}초`, j.qaSummary ? `검수 ${j.qaSummary}` : '', ...(j.log || [])].filter(Boolean).join('\n');
+    else if (j.status === 'done') {
+      const cp = j.cost ? priceOf(j.cost) : null;
+      pre.textContent = [`${(j.duration || 0).toFixed(1)}초`, j.qaSummary ? `검수 ${j.qaSummary}` : '', cp ? `비용 ${fmtUsd(cp.usd)} ≈ ${fmtKrw(cp.krw)} (Claude ${fmtUsd(cp.claudeUsd)} · 음성 ${fmtNum(cp.credits)}크레딧)` : '', ...(j.log || []).filter((l) => !l.startsWith('비용:'))].filter(Boolean).join('\n');
+    }
     else if (j.status === 'error') pre.textContent = j.error;
     li.appendChild(pre);
     if (j.status === 'running') { const bar = document.createElement('div'); bar.className = 'bar'; bar.innerHTML = `<i style="width:${j.progress || 0}%"></i>`; li.appendChild(bar); }
@@ -507,6 +605,11 @@ const UI = {
     $('btn-voice-clear').onclick = () => { Object.keys(VOICE).forEach((k) => delete VOICE[k]); voiceDB.clear(); loadScript(SCRIPT); $('voice-bar').style.width = '0'; status('voice-status', '음성을 지웠습니다.'); };
     $('btn-qa').onclick = doQA;
     $('btn-mp4').onclick = renderMP4;
+    $('btn-all').onclick = makeAll;
+    Object.entries(CARTESIA_PLANS).forEach(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v.label; $('c-plan').appendChild(o); });
+    $('c-plan').onchange = () => { $('c-per1k-wrap').hidden = $('c-plan').value !== 'custom'; };
+    ['topic', 'length', 'source'].forEach((id) => $(id).addEventListener('input', updateEstimate));
+    renderRecentTopics(); updateEstimate();
     $('btn-queue').onclick = queueTopics;
     $('btn-lesson').onclick = () => { addLesson($('lesson').value); $('lesson').value = ''; };
     $('btn-json').onclick = () => {
@@ -524,11 +627,17 @@ const UI = {
       const s = settings();
       $('k-anthropic').value = s.anthropicKey || ''; $('k-cartesia').value = s.cartesiaKey || '';
       $('c-model').value = s.cartesiaModel || ''; $('c-version').value = s.cartesiaVersion || '';
+      $('c-plan').value = s.cartesiaPlan || 'pro'; $('c-per1k').value = s.cartesiaPer1k || ''; $('c-mult').value = s.creditMult || '1'; $('krw').value = s.krwRate || '1400';
+      $('c-per1k-wrap').hidden = $('c-plan').value !== 'custom';
       dlg.showModal();
     };
     $('settings-close').onclick = () => dlg.close();
     $('settings-save').onclick = () => {
-      store.set('settings', { anthropicKey: $('k-anthropic').value.trim(), cartesiaKey: $('k-cartesia').value.trim(), cartesiaModel: $('c-model').value.trim(), cartesiaVersion: $('c-version').value.trim() });
+      store.set('settings', {
+        anthropicKey: $('k-anthropic').value.trim(), cartesiaKey: $('k-cartesia').value.trim(), cartesiaModel: $('c-model').value.trim(), cartesiaVersion: $('c-version').value.trim(),
+        cartesiaPlan: $('c-plan').value, cartesiaPer1k: $('c-per1k').value.trim(), creditMult: $('c-mult').value.trim(), krwRate: $('krw').value.trim(),
+      });
+      renderCost(); updateEstimate();
       dlg.close(); checkServer();
     };
     // 드래그 앤 드롭
@@ -545,6 +654,7 @@ const UI = {
   },
   rebuild() {
     const box = $('scenes'); if (!box) return;
+    setTimeout(renderCost, 0);
     box.innerHTML = '';
     TL.forEach((e) => {
       const b = document.createElement('button');

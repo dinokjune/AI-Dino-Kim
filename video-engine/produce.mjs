@@ -129,12 +129,12 @@ export async function renderScript({ baseUrl, settings, script, voices, outDir, 
 export async function produceTopic({ baseUrl, settings, job, outDir, onProgress }) {
   return withStudioPage(baseUrl, settings, async (page) => {
     onProgress && onProgress('script', 0);
-    const res = await page.evaluate((j) => autopilot(j).then((r) => ({ script: r.script, qa: r.qa, log: r.log, voices: exportVoices() })), job);
+    const res = await page.evaluate((j) => autopilot(j).then((r) => ({ script: r.script, qa: r.qa, log: r.log, cost: r.cost, voices: exportVoices() })), job);
     fs.mkdirSync(outDir, { recursive: true });
     fs.writeFileSync(path.join(outDir, 'script.json'), JSON.stringify(res.script, null, 2));
     fs.writeFileSync(path.join(outDir, 'qa.json'), JSON.stringify(res.qa, null, 2));
     const files = await renderToFiles(page, outDir, { onProgress });
-    return { ...files, qa: res.qa, log: res.log, script: res.script };
+    return { ...files, qa: res.qa, log: res.log, script: res.script, cost: res.cost };
   });
 }
 

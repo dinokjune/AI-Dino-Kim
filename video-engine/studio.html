@@ -87,7 +87,16 @@
   .lessons li span { flex: 1; }
   .lessons li button { background: none; border: 0; color: var(--muted); cursor: pointer; }
   details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 10px; }
-  dialog { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; padding: 20px; width: min(520px, calc(100vw - 32px)); }
+  .allbox { margin-top: 14px; background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  button.b.big { width: 100%; padding: 13px; font-size: 18px; }
+  .costbox { margin-top: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .costbox h3 { font-family: 'Jua'; font-weight: 400; margin: 0 0 8px; font-size: 17px; }
+  .costbox table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .costbox td { padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  .costbox td:nth-child(2) { color: var(--muted); }
+  .costbox td:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .costbox tr.sum td { border-bottom: 0; font-weight: 700; color: var(--accent); padding-top: 9px; }
+  dialog { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; padding: 20px; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto; }
   dialog::backdrop { background: rgba(0,0,0,.6); }
   dialog h2 { font-family: 'Jua'; font-weight: 400; margin: 0 0 6px; }
   #drop { position: fixed; inset: 0; background: rgba(244,208,63,.15); border: 4px dashed var(--accent); display: none; align-items: center; justify-content: center; font-family: 'Jua'; font-size: 34px; z-index: 20; }
@@ -134,7 +143,9 @@
       <h2><span class="n">2</span>주제와 대본</h2>
       <label class="f" for="topic">주제</label>
       <input type="text" id="topic" placeholder="예: 일주일에 책 한 권 읽는 법">
+      <div class="hint" style="margin:10px 0 0">이 톤의 추천 주제</div>
       <div class="chips" id="topic-chips"></div>
+      <div id="recent-wrap" hidden><div class="hint" style="margin:10px 0 0">최근에 만든 주제</div><div class="chips" id="recent-topics"></div></div>
       <div class="row" style="margin-top:10px">
         <button class="b" id="btn-topics">✨ AI 주제 추천</button>
         <select id="length" class="fill" aria-label="영상 길이"></select>
@@ -148,8 +159,15 @@
           <div class="fill"><label class="f" for="url">채널 주소</label><input type="text" id="url" placeholder="youtube.com/@..."></div>
         </div>
       </details>
-      <div class="row" style="margin-top:14px">
-        <button class="b primary" id="btn-script">대본 만들기</button>
+      <div class="allbox">
+        <button class="b primary big" id="btn-all">⚡ 이 주제로 영상 완성하기</button>
+        <div class="hint" style="margin:8px 0 0">대본 → 내 목소리 → 검수 → MP4까지 한 번에 진행합니다.</div>
+        <div class="hint" id="estimate" style="margin:6px 0 0"></div>
+        <div class="status" id="all-status"></div>
+      </div>
+      <div class="hint" style="margin:14px 0 0">단계별로 직접 하려면</div>
+      <div class="row" style="margin-top:6px">
+        <button class="b" id="btn-script">대본만 만들기</button>
         <button class="b" id="btn-copy">프롬프트 복사</button>
         <button class="b" id="btn-paste">JSON 붙여넣기</button>
       </div>
@@ -219,6 +237,7 @@
       <span class="chk"><input type="checkbox" id="tts"><label for="tts">브라우저 TTS 미리듣기</label></span>
     </div>
     <div id="scenes"></div>
+    <div class="costbox"><h3>💰 크레딧 · 비용</h3><div id="cost"></div></div>
     <div id="edit-box" hidden style="margin-top:10px">
       <textarea id="editor" class="code"></textarea>
       <button class="b" id="btn-apply-edit" style="margin-top:8px">편집 적용</button>
@@ -234,6 +253,16 @@
   <div class="row">
     <div class="fill"><label class="f" for="c-model">Cartesia 모델</label><input type="text" id="c-model" placeholder="서버 기본값"></div>
     <div class="fill"><label class="f" for="c-version">Cartesia-Version</label><input type="text" id="c-version" placeholder="서버 기본값"></div>
+  </div>
+  <h2 style="margin-top:18px; font-size:18px">비용 계산 기준</h2>
+  <p class="hint">Claude 비용은 실제 사용 토큰으로 계산합니다. Cartesia는 글자당 약 1크레딧이고, 금액은 아래 요금제 단가로 계산합니다(요금은 Cartesia 요금 페이지에서 확인하세요).</p>
+  <div class="row">
+    <div class="fill"><label class="f" for="c-plan">Cartesia 요금제</label><select id="c-plan"></select></div>
+    <div class="fill" id="c-per1k-wrap" hidden><label class="f" for="c-per1k">1,000크레딧당 달러</label><input type="text" id="c-per1k" placeholder="예: 0.04"></div>
+  </div>
+  <div class="row">
+    <div class="fill"><label class="f" for="c-mult">크레딧 배수 (클론 목소리 추가 과금 시)</label><input type="text" id="c-mult" placeholder="1"></div>
+    <div class="fill"><label class="f" for="krw">환율 (원/달러)</label><input type="text" id="krw" placeholder="1400"></div>
   </div>
   <div class="row" style="margin-top:16px; justify-content:flex-end">
     <button class="b" id="settings-close">닫기</button>
@@ -257,6 +286,7 @@
 <script src="script.js"></script>
 <script src="src/engine.js"></script>
 <script src="src/qa.js"></script>
+<script src="src/cost.js"></script>
 <script src="src/offline.js"></script>
 <script src="src/studio.js"></script>
 </body>

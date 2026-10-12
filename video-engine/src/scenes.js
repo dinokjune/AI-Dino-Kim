@@ -233,7 +233,9 @@ SCENES.typing = {
   draw(s, t, d) {
     const str = s.text || '';
     const typeEnd = Math.min(d * 0.6, 0.8 + str.length * 0.045);
-    popAt(W / 2 - 40, 470, popK(t, 0.2), () => {
+    // 타이핑이 끝난 뒤에는 화면이 멈추지 않도록 게시물로 천천히 다가간다
+    const push = 1 + 0.08 * easeInOut(clamp01((t - typeEnd - 0.4) / Math.max(1, d - typeEnd - 0.4)));
+    popAt(W / 2 - 40, 470, popK(t, 0.2) * push, () => {
       card(0, 0, 1180, 560, { fill: '#FFFFFF' });
       fill(PAL.blue); stroke(LINE()); strokeWeight(5); circle(-490, -200, 84);
       txt(s.name || 'prompt_master', -430, -215, 40, PAL.ink, { align: LEFT });
@@ -294,10 +296,16 @@ SCENES.cards = {
     const items = s.items || [], n = items.length, ts = revealTimes(n, d, 0.5, s.stamp ? 1.6 : 1);
     const cw = Math.min(480, 1560 / n), gx = cw + 50, ox = W / 2 - ((n - 1) * gx) / 2;
     if (s.title) withAlpha(inK(t, 0.1), () => txt(s.title, W / 2, 150, 66, titleInk(), { outline: titleOutline(), ow: 12 }));
+    // 모든 카드가 나온 뒤에는 한 장씩 차례로 강조해 시선을 옮긴다 (정지 화면 방지)
+    const allIn = ts[n - 1] + (s.stamp ? 1.0 : 0.6);
+    const focus = t > allIn ? Math.floor((t - allIn) / 1.1) % n : -1;
+    const fk = t > allIn ? Math.sin(clamp01(((t - allIn) % 1.1) / 1.1) * PI) : 0;
     items.forEach((it, i) => {
       const cx = ox + i * gx, cy = 540;
-      popAt(cx, cy, popK(t, ts[i]), () => {
-        noStroke(); fill(0, 0, 0, 40); rect(-cw / 2 + 12, -290 + 14, cw, 580, 10);
+      const lift = i === focus ? fk : 0;
+      popAt(cx, cy - lift * 24, popK(t, ts[i]) * (1 + lift * 0.05), () => {
+        noStroke(); fill(0, 0, 0, 40 + lift * 30); rect(-cw / 2 + 12, -290 + 14 + lift * 10, cw, 580, 10);
+        if (lift > 0) { noFill(); stroke(PAL.yellow); strokeWeight(14 * lift); rect(-cw / 2 - 10, -300, cw + 20, 600, 16); }
         fill(PAL.wood); stroke(LINE()); strokeWeight(6); rect(-cw / 2, -290, cw, 580, 10);
         fill(PAL.card); rect(-cw / 2 + 26, -264, cw - 52, 528, 6);
         if (it.icon) drawIcon(it.icon, 0, -150, 120, t);
@@ -487,9 +495,17 @@ SCENES.endcard = {
 
 // ── 텍스트 색 헬퍼 ──
 let CURRENT_WALL = '#E1D3B7';
-function titleInk() { return isDark(CURRENT_WALL) ? '#FFFFFF' : PAL.ink; }
-function titleOutline() { return isDark(CURRENT_WALL) ? PAL.ink : PAL.card; }
-function subInk() { return isDark(CURRENT_WALL) ? '#E8E2D6' : '#5A4E44'; }
+// 글자색은 배경과의 명암 대비(WCAG)가 더 큰 쪽을 고른다. 올리브·보라처럼 중간 밝기 벽에서도 읽히게.
+function relLum(hex) {
+  const c = color(hex);
+  const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  return 0.2126 * f(red(c)) + 0.7152 * f(green(c)) + 0.0722 * f(blue(c));
+}
+function contrastOf(a, b) { const x = relLum(a), y = relLum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+function lightWins() { return contrastOf('#FFFFFF', CURRENT_WALL) >= contrastOf(PAL.ink, CURRENT_WALL); }
+function titleInk() { return lightWins() ? '#FFFFFF' : PAL.ink; }
+function titleOutline() { return lightWins() ? PAL.ink : PAL.card; }
+function subInk() { return lightWins() ? '#F1ECE2' : '#4A4038'; }
 function subInkCard() { return PAL.cardText ? '#B8B8C8' : '#6A5E52'; }
 
 // *강조* 표시가 있는 한 줄을 중앙 정렬로 그린다

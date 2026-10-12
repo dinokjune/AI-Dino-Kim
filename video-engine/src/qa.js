@@ -39,17 +39,29 @@ function numberIssues(source = '') {
 }
 
 // 캔버스를 작게 줄여 밝기와 움직임을 잰다
+// 밝기·움직임 양은 64×36(톤 목표값을 잰 기준), 정지 화면 판정은 더 촘촘한 192×108로 본다
 const QA_CANVAS = (() => { const c = document.createElement('canvas'); c.width = 64; c.height = 36; return c; })();
-function sampleFrame(T) {
+const QA_FINE = (() => { const c = document.createElement('canvas'); c.width = 192; c.height = 108; return c; })();
+function sampleFrame(T, fine = false) {
   renderAt(T);
   const g = QA_CANVAS.getContext('2d', { willReadFrequently: true });
   g.drawImage(drawingContext.canvas, 0, 0, 64, 36);
-  return g.getImageData(0, 0, 64, 36).data;
+  const small = g.getImageData(0, 0, 64, 36).data;
+  if (!fine) return small;
+  const h = QA_FINE.getContext('2d', { willReadFrequently: true });
+  h.drawImage(drawingContext.canvas, 0, 0, 192, 108);
+  return { small, fine: h.getImageData(0, 0, 192, 108).data };
 }
 function lumaOf(px) {
   let s = 0;
   for (let i = 0; i < px.length; i += 4) s += px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114;
   return s / (px.length / 4);
+}
+// 눈에 띄게 바뀐 픽셀 비율: 작은 마스코트가 움직여도 '움직임'으로 잡히게 평균 대신 이걸로 정지를 판단한다
+function changedRatio(a, b) {
+  let n = 0;
+  for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 30) n++;
+  return n / (a.length / 4);
 }
 function diffOf(a, b) {
   let s = 0;
@@ -81,15 +93,15 @@ async function runQA({ source = '' } = {}) {
   let prev = null, still = 0, flagged = false;
   const stillAt = [];
   for (let T = 0.05; T < TOTAL; T += step) {
-    const px = sampleFrame(T);
+    const fr = sampleFrame(T, true), px = fr.small;
     lumas.push(lumaOf(px));
     if (prev) {
-      const d = diffOf(prev, px);
+      const d = diffOf(prev.small, px);
       diffs.push(d);
-      if (d < 0.25) { still += step; if (still >= 1.0 && !flagged) { stillAt.push(T - still); flagged = true; } }
+      if (changedRatio(prev.fine, fr.fine) < 0.002) { still += step; if (still >= 1.0 && !flagged) { stillAt.push(T - still); flagged = true; } }
       else { still = 0; flagged = false; }
     }
-    prev = px;
+    prev = fr;
     if (lumas.length % 20 === 0) await new Promise((r) => setTimeout(r, 0));
   }
   const L = lumas.reduce((a, b) => a + b, 0) / lumas.length;

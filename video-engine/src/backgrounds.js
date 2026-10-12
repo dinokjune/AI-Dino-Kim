@@ -123,11 +123,13 @@ function bgNews(wall) {
   }
   image(HALFTONE, 0, 0); push(); translate(W, H); rotate(PI); image(HALFTONE, 0, 0); pop();
   stroke(26, 26, 26, 40); strokeWeight(2);
-  for (let x = 320; x < W; x += 320) line(x, 150, x, H - 40);
-  stroke(26); strokeWeight(5); line(60, 120, W - 60, 120); strokeWeight(2); line(60, 132, W - 60, 132);
-  noStroke(); fill(26); textFont(FONT_HEAD); textStyle(NORMAL); textSize(56); textAlign(CENTER, CENTER);
-  text(META().channel || '데일리 브리핑', W / 2, 70);
-  textFont(FONT_BODY); textSize(20); textAlign(LEFT, CENTER); text('제' + (SCENE_I + 1) + '면', 70, 70);
+  for (let x = 320; x < W; x += 320) line(x, 100, x, H - 40);
+  // 머리글은 장면 제목(y≈140)과 겹치지 않게 맨 위 띠에만 둔다
+  const ink = isDark(wall) ? 235 : 26;
+  stroke(ink); strokeWeight(4); line(60, 76, W - 60, 76); strokeWeight(2); line(60, 85, W - 60, 85);
+  noStroke(); fill(ink); textFont(FONT_HEAD); textStyle(NORMAL); textSize(40); textAlign(CENTER, CENTER);
+  text(META().channel || '데일리 브리핑', W / 2, 42);
+  textFont(FONT_BODY); textSize(18); textAlign(LEFT, CENTER); text('제' + (SCENE_I + 1) + '면', 70, 42);
 }
 
 function bgDocu(wall) {

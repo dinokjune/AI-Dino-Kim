@@ -12,6 +12,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
 import { scanFonts, serveFont, saveFont } from './fonts.mjs';
+import { claudeCost, createLedger, loadJobs, saveJobs } from './usage.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 loadDotEnv(path.join(ROOT, '.env'));
@@ -24,6 +25,9 @@ const CARTESIA_VERSION = process.env.CARTESIA_VERSION || '2024-11-13';
 const CARTESIA_MODEL = process.env.CARTESIA_MODEL || 'sonic-3';
 
 const OUT = path.join(ROOT, 'out');
+const LEDGER = createLedger(OUT);
+// 비용 기록에 붙일 꼬리표 (주제·제목). 한글이라 URI 인코딩으로 받는다
+const costTag = (req) => { try { return decodeURIComponent(String(req.headers['x-cost-tag'] || '')).slice(0, 80); } catch { return ''; } };
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.md': 'text/markdown; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.wav': 'audio/wav', '.mp4': 'video/mp4' };
 
@@ -70,7 +74,9 @@ async function handleClaude(req, res) {
     const msg = await stream.finalMessage();
     if (msg.stop_reason === 'refusal') return send(res, 422, { error: '모델이 이 요청을 거절했습니다', details: msg.stop_details || null });
     const text = msg.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
-    return send(res, 200, { text, model: msg.model, stop_reason: msg.stop_reason, usage: msg.usage });
+    const cost = claudeCost(msg.model, msg.usage);
+    LEDGER.add({ kind: 'claude', tag: costTag(req), model: cost.model, tokens: cost.tokens, usd: cost.usd });
+    return send(res, 200, { text, model: msg.model, stop_reason: msg.stop_reason, usage: msg.usage, cost });
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) return send(res, 401, { error: 'Anthropic API 키가 올바르지 않습니다' });
     if (err instanceof Anthropic.RateLimitError) return send(res, 429, { error: '요청 한도를 넘었습니다. 잠시 후 다시 시도하세요' });
@@ -165,7 +171,10 @@ async function handleTTS(req, res) {
     try { out = await ttsBytes(opts); note = `타임스탬프 없이 생성됨: ${e1.message}`; }
     catch (e2) { return send(res, 502, { error: e2.message, first: e1.message }); }
   }
-  return send(res, 200, { audio: out.wav.toString('base64'), words: out.words, duration: out.duration, note });
+  // Cartesia는 글자당 약 1크레딧 (공식 문서 기준)
+  const chars = [...opts.text].length;
+  LEDGER.add({ kind: 'tts', tag: costTag(req), model: opts.model, chars });
+  return send(res, 200, { audio: out.wav.toString('base64'), words: out.words, duration: out.duration, note, cost: { chars, credits: chars } });
 }
 
 // ── 정적 파일 ──
@@ -185,7 +194,7 @@ function serveStatic(req, res) {
 }
 
 // ── 작업 대기열: 한 번에 하나씩 헤드리스 브라우저로 처리 ──
-const JOBS = [];
+const JOBS = loadJobs(OUT);
 let running = false;
 
 function publicJob(j) {
@@ -233,6 +242,7 @@ async function runQueue(baseUrl) {
           job.qa = res.qa;
         }
         job.log = res.log || [];
+        if (res.cost) job.cost = res.cost;
         job.duration = res.duration;
         // 숫자 검문에 걸린 영상은 업로드하지 않는다
         const failed = res.qa && res.qa.some((r) => r.level === 'fail');
@@ -247,6 +257,7 @@ async function runQueue(baseUrl) {
       }
       job.step = null; job.finishedAt = Date.now();
       delete job.payload; delete job.settings;
+      saveJobs(OUT, JOBS);
       notify(job);
     }
   } finally {
@@ -312,6 +323,7 @@ const server = http.createServer(async (req, res) => {
       catch (e) { return send(res, 400, { error: e.message }); }
     }
     if (req.method === 'GET' && req.url.startsWith('/userfonts/')) return serveFont(ROOT, req, res);
+    if (req.method === 'GET' && req.url === '/api/ledger') return send(res, 200, LEDGER.summary());
     if (req.method === 'GET' && req.url === '/api/jobs') return send(res, 200, { jobs: JOBS.map(publicJob).reverse() });
     if (req.method === 'POST' && req.url === '/api/render') return await handleRender(req, res);
     if (req.method === 'POST' && req.url === '/api/jobs') return await handleJobs(req, res);
