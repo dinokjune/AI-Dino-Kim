@@ -37,10 +37,65 @@ async function checkServer() {
   $('queue-upload').disabled = !(SERVER && SERVER.youtube);
   $('queue-upload').title = SERVER && SERVER.youtube ? '' : '유튜브 업로드 설정(README 참고)을 하면 켤 수 있습니다';
   if (SERVER) pollJobs();
+  if ($('font-head') && userFontsPromise) userFontsPromise.then(renderFontSelects);
   if (!SERVER) status('script-status', '서버 없이 열렸습니다. "프롬프트 복사" → Claude 대화창에 붙여넣기 → 받은 JSON을 "JSON 붙여넣기"로 넣으면 됩니다. 음성 생성은 서버(npm start)가 필요합니다.');
 }
 
 function status(id, msg, err) { const el = $(id); el.textContent = msg || ''; el.classList.toggle('err', !!err); }
+
+// ── 내 글꼴 ──
+function currentFonts() {
+  const f = store.get('fonts', {}) || {};
+  return f.head || f.body ? { head: f.head || '', body: f.body || '' } : null;
+}
+
+function renderFontSelects() {
+  const cur = store.get('fonts', {}) || {};
+  const card = selectedCard();
+  const fill = (id, toneDefault, val) => {
+    const sel = $(id);
+    sel.innerHTML = '';
+    const d = document.createElement('option'); d.value = ''; d.textContent = `톤 기본 (${toneDefault})`; sel.appendChild(d);
+    USER_FONTS.forEach((f) => { const o = document.createElement('option'); o.value = f.family; o.textContent = `${f.family}  · ${f.source}`; sel.appendChild(o); });
+    sel.value = USER_FONTS.some((f) => f.family === val) ? val : '';
+  };
+  fill('font-head', card.engine.fontHead, cur.head);
+  fill('font-body', card.engine.fontBody, cur.body);
+  $('fp-head').style.fontFamily = `"${$('font-head').value || card.engine.fontHead}"`;
+  $('fp-body').style.fontFamily = `"${$('font-body').value || card.engine.fontBody}"`;
+  const bySrc = {};
+  USER_FONTS.forEach((f) => { const k = f.source.split(' · ')[0]; bySrc[k] = (bySrc[k] || 0) + 1; });
+  status('font-status', USER_FONTS.length
+    ? `글꼴 ${USER_FONTS.length}개를 찾았습니다 (${Object.entries(bySrc).map(([k, v]) => `${k} ${v}`).join(', ')}).`
+    : (SERVER ? '다운로드 폴더나 video-engine/fonts 폴더에서 글꼴을 찾지 못했습니다. 글꼴 파일을 넣고 "다시 찾기"를 누르거나 "글꼴 파일 추가"로 올리세요.' : '서버 없이 열어 다운로드 폴더를 볼 수 없습니다. "글꼴 파일 추가"로 고르면 이 화면에서만 쓸 수 있습니다.'));
+}
+
+async function chooseFonts() {
+  const f = { head: $('font-head').value, body: $('font-body').value };
+  store.set('fonts', f);
+  status('font-status', '글꼴을 불러오는 중…');
+  await ensureFonts([f.head, f.body]);
+  const s = JSON.parse(JSON.stringify(SCRIPT));
+  s.meta.fonts = currentFonts();
+  if (!s.meta.fonts) delete s.meta.fonts;
+  applyScript(s, { keepTime: true });
+  renderFontSelects();
+}
+
+async function addFontFiles(files) {
+  for (const file of files) {
+    const buf = await file.arrayBuffer();
+    if (SERVER) {
+      status('font-status', `${file.name} 올리는 중…`);
+      try { await api('/api/fonts', { name: file.name, data: bytesToBase64(new Uint8Array(buf)) }); }
+      catch (e) { status('font-status', `${file.name}: ${e.message}`, true); return; }
+    } else {
+      registerFont({ family: file.name.replace(/\.(ttf|otf|woff2?)$/i, ''), buffer: buf, source: '이 화면에서만' });
+    }
+  }
+  if (SERVER) await loadUserFonts(true);
+  renderFontSelects();
+}
 
 // ── 1. 톤 카드 ──
 function selectedCard() { return TONE_CARDS.find((c) => c.id === store.get('tone', 'stage')) || TONE_CARDS[0]; }
@@ -84,6 +139,7 @@ function addTopicChip(tp) {
 function chooseTone(id) {
   store.set('tone', id);
   renderTones();
+  if ($('font-head')) renderFontSelects();
   const s = JSON.parse(JSON.stringify(SCRIPT));
   s.meta.tone = id;
   applyScript(s, { keepTime: true });
@@ -107,6 +163,7 @@ function applyScript(obj, { keepTime = false } = {}) {
   if (ch) obj.meta.channel = ch;
   if (url) obj.meta.url = url;
   obj.meta.voiceId = $('voice-id').value.trim();
+  if (!obj.meta.fonts && currentFonts()) obj.meta.fonts = currentFonts();
   if ($('source').value.trim()) obj.meta.source = $('source').value.trim();
   const t = curT;
   pause();
@@ -122,7 +179,7 @@ async function makeScript() {
   $('btn-script').disabled = true;
   try {
     const r = await writeScript({
-      ...inp, voiceId: $('voice-id').value.trim(),
+      ...inp, voiceId: $('voice-id').value.trim(), fonts: currentFonts(),
       onStep: (n) => status('script-status', n ? '근거 없는 숫자나 형식 오류가 있어 한 번 더 쓰는 중…' : `"${inp.topic}" 대본을 쓰는 중… (톤: ${inp.card.name}, 보통 30초~2분)`),
     });
     curT = 0;
@@ -234,7 +291,7 @@ async function makeVoices() {
 // 화면 없이 주제 하나를 끝까지 만든다: 대본 → 숫자 검문(실패 시 1회 재작성) → 음성 → 검수
 // 서버의 자동 제작 대기열이 헤드리스 브라우저에서 부른다.
 // 대본 작성: 형식 오류나 근거 없는 숫자가 나오면 이유를 알려 주고 한 번 다시 쓰게 한다
-async function writeScript({ topic, card, length = 'standard', source = '', lessons = [], channel = '', url = '', voiceId = '', onStep }) {
+async function writeScript({ topic, card, length = 'standard', source = '', lessons = [], channel = '', url = '', voiceId = '', fonts = null, onStep }) {
   const log = [];
   let issues = [], last = null;
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -246,6 +303,7 @@ async function writeScript({ topic, card, length = 'standard', source = '', less
     const errs = validateScript(obj);
     if (errs.length) { issues = errs; log.push(`대본 ${attempt + 1}차: 형식 오류 ${errs.length}개`); continue; }
     obj.meta = Object.assign({}, obj.meta, { tone: card.id, topic, source, voiceId });
+    if (fonts) obj.meta.fonts = fonts;
     if (channel) obj.meta.channel = channel;
     if (url) obj.meta.url = url;
     loadScript(obj);
@@ -260,9 +318,10 @@ async function writeScript({ topic, card, length = 'standard', source = '', less
 
 // 화면 없이 주제 하나를 끝까지 만든다: 대본(재작성 포함) → 음성 → 검수
 // 서버의 자동 제작 대기열이 헤드리스 브라우저에서 부른다.
-async function autopilot({ topic, tone, length = 'standard', voiceId = '', source = '', channel = '', url = '', lessons = [], withVoice = true }) {
+async function autopilot({ topic, tone, length = 'standard', voiceId = '', source = '', channel = '', url = '', lessons = [], withVoice = true, fonts = null }) {
+  if (fonts) { await loadUserFonts(); await ensureFonts([fonts.head, fonts.body]); }
   const card = TONE_CARDS.find((c) => c.id === tone) || TONE_CARDS[0];
-  const { log } = await writeScript({ topic, card, length, source, lessons, channel, url, voiceId });
+  const { log } = await writeScript({ topic, card, length, source, lessons, channel, url, voiceId, fonts });
   if (withVoice) {
     const v = await generateVoices({ voiceId });
     log.push(`음성 ${v.done}개 장면` + (v.notes.length ? ` (${v.notes[0]})` : ''));
@@ -351,7 +410,7 @@ async function queueTopics() {
     const r = await api('/api/jobs', jobBody({
       topics, tone: selectedCard().id, length: $('length').value, voiceId: $('voice-id').value.trim(),
       source: $('source').value.trim(), channel: $('channel').value.trim(), url: $('url').value.trim(),
-      lessons: store.get('lessons', []), withVoice: $('queue-voice').checked, upload: $('queue-upload').checked,
+      lessons: store.get('lessons', []), withVoice: $('queue-voice').checked, upload: $('queue-upload').checked, fonts: currentFonts(),
     }));
     status('queue-status', `${r.jobs.length}개 주제를 대기열에 넣었습니다. 한 편에 몇 분씩 걸립니다.`);
     $('queue-topics').value = '';
@@ -414,6 +473,15 @@ const UI = {
     if (META().tone !== tone) { const s = JSON.parse(JSON.stringify(SCRIPT)); s.meta.tone = tone; loadScript(s); }
     renderTones();
     renderLessons();
+    $('font-head').onchange = chooseFonts;
+    $('font-body').onchange = chooseFonts;
+    $('btn-fonts-rescan').onclick = async () => { status('font-status', '찾는 중…'); await loadUserFonts(true); renderFontSelects(); };
+    $('font-file').onchange = (e) => { addFontFiles([...e.target.files]); e.target.value = ''; };
+    loadUserFonts().then(async () => {
+      renderFontSelects();
+      const f = currentFonts();
+      if (f) { await ensureFonts([f.head, f.body]); if (!META().fonts) { const s = JSON.parse(JSON.stringify(SCRIPT)); s.meta.fonts = f; loadScript(s); } }
+    });
     if (!HEADLESS) restoreVoices().then((n) => { if (n) status('voice-status', `저장해 둔 음성 ${n}개를 불러왔습니다.`); });
 
     $('play').onclick = () => (playing ? pause() : play());

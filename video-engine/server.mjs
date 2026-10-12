@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
+import { scanFonts, serveFont, saveFont } from './fonts.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 loadDotEnv(path.join(ROOT, '.env'));
@@ -274,7 +275,7 @@ async function handleJobs(req, res) {
   const created = topics.map((topic, i) => ({
     id: 'j' + (Date.now() + i).toString(36), kind: 'auto', title: topic, status: 'queued', createdAt: Date.now(), upload: !!body.upload,
     settings: keysFrom(req, body),
-    payload: { topic, tone: body.tone || 'stage', length: body.length || 'standard', voiceId: body.voiceId || process.env.CARTESIA_VOICE_ID || '', source: body.source || '', channel: body.channel || '', url: body.url || '', lessons: body.lessons || [], withVoice: body.withVoice !== false },
+    payload: { topic, tone: body.tone || 'stage', length: body.length || 'standard', voiceId: body.voiceId || process.env.CARTESIA_VOICE_ID || '', source: body.source || '', channel: body.channel || '', url: body.url || '', lessons: body.lessons || [], withVoice: body.withVoice !== false, fonts: body.fonts || null },
   }));
   JOBS.push(...created); runQueue(BASE_URL);
   send(res, 200, { jobs: created.map(publicJob) });
@@ -304,6 +305,13 @@ const server = http.createServer(async (req, res) => {
         youtube: !!(process.env.YT_CLIENT_ID && process.env.YT_CLIENT_SECRET && process.env.YT_REFRESH_TOKEN),
       });
     }
+    if (req.method === 'GET' && req.url === '/api/fonts') return send(res, 200, { fonts: scanFonts(ROOT) });
+    if (req.method === 'POST' && req.url === '/api/fonts') {
+      const b = await readBody(req, 90_000_000);
+      try { const name = saveFont(ROOT, b.name, b.data); return send(res, 200, { saved: name, fonts: scanFonts(ROOT) }); }
+      catch (e) { return send(res, 400, { error: e.message }); }
+    }
+    if (req.method === 'GET' && req.url.startsWith('/userfonts/')) return serveFont(ROOT, req, res);
     if (req.method === 'GET' && req.url === '/api/jobs') return send(res, 200, { jobs: JOBS.map(publicJob).reverse() });
     if (req.method === 'POST' && req.url === '/api/render') return await handleRender(req, res);
     if (req.method === 'POST' && req.url === '/api/jobs') return await handleJobs(req, res);

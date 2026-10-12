@@ -49,6 +49,7 @@ export async function withStudioPage(baseUrl, settings, fn) {
 
 async function waitFonts(page) {
   await page.evaluate(async () => {
+    if (typeof loadUserFonts === 'function') await loadUserFonts();
     const fams = [FONT_HEAD, FONT_BODY, 'Nanum Gothic Coding', 'Noto Sans KR'];
     await Promise.all(fams.map((f) => document.fonts.load(`64px "${f}"`).catch(() => null)));
     await document.fonts.ready;

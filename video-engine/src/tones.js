@@ -316,6 +316,13 @@ function setTone(id) {
   FONT_BODY = TONE.engine.fontBody;
 }
 
+// 내 글꼴로 바꾸기: { head: 제목·자막 글꼴, body: 본문 글꼴 } (비어 있으면 톤 기본값)
+function applyFontOverride(f) {
+  if (!f) return;
+  if (f.head) FONT_HEAD = f.head;
+  if (f.body) FONT_BODY = f.body;
+}
+
 // 대본 생성 프롬프트에 넣을 톤 카드 텍스트
 function toneCardText(card) {
   const r = Object.entries(card.rules).map(([k, v], i) => `${i + 1}. ${k}: ${v}`).join('\n');

@@ -3,3 +3,5 @@ node_modules/
 out/
 lessons.txt
 topics.done.txt
+fonts/*
+!fonts/README.md

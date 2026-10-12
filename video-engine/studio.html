@@ -111,6 +111,23 @@
       <p class="hint">톤마다 주인공·바탕·글꼴·자막·전환·효과음·음악·금지 사항 11개와 목표 숫자가 정해져 있습니다. 고르면 오른쪽 영상이 바로 그 톤으로 바뀝니다.</p>
       <div class="tones" id="tones"></div>
       <div class="card-detail" id="card-detail"></div>
+      <div class="card-detail">
+        <h3>내 글꼴</h3>
+        <p class="hint" style="margin:4px 0 8px">내 컴퓨터의 <b>다운로드 폴더</b>와 <code>video-engine/fonts</code> 폴더에서 글꼴을 찾습니다. .ttf .otf .woff .woff2 파일과 zip으로 받은 글꼴 안의 파일까지 읽습니다. 고르면 모든 톤에 적용되고, MP4 렌더와 자동 제작에도 같이 쓰입니다.</p>
+        <div class="row">
+          <div class="fill"><label class="f" for="font-head">제목 · 자막 글꼴</label><select id="font-head"></select></div>
+          <div class="fill"><label class="f" for="font-body">본문 글꼴</label><select id="font-body"></select></div>
+        </div>
+        <div id="font-preview" style="margin-top:12px; background:#15110d; border-radius:10px; padding:14px; line-height:1.4">
+          <div id="fp-head" style="font-size:30px">회의록, 5분이면 끝 ABC 123</div>
+          <div id="fp-body" style="font-size:16px; color:var(--muted); margin-top:6px">본문과 설명 문장은 이 글꼴로 보입니다. 가나다라마바사</div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="b" id="btn-fonts-rescan">글꼴 다시 찾기</button>
+          <label class="b" style="cursor:pointer">글꼴 파일 추가<input type="file" id="font-file" multiple accept=".ttf,.otf,.woff,.woff2" hidden></label>
+        </div>
+        <div class="status" id="font-status"></div>
+      </div>
     </section>
 
     <section class="step">
@@ -229,6 +246,7 @@
 <script src="vendor/p5.min.js"></script>
 <script>window.p5 || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"><\/script>')</script>
 <script src="src/lib.js"></script>
+<script src="src/fonts.js"></script>
 <script src="src/tones.js"></script>
 <script src="src/graphics.js"></script>
 <script src="src/backgrounds.js"></script>

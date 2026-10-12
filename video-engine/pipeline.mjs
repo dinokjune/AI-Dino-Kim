@@ -27,6 +27,7 @@ if (!args.topic && !args.topics) {
   console.log(`사용법:
   node pipeline.mjs --topic "주제" [--tone stage] [--length standard|shorts|long] [--voice <Cartesia 목소리 ID>]
                     [--source 참고자료.txt] [--channel "채널 이름"] [--url "채널 주소"] [--no-voice] [--upload]
+                    [--font-head "글꼴 이름"] [--font-body "글꼴 이름"]   (다운로드·fonts 폴더의 파일 이름, 확장자 제외)
   node pipeline.mjs --topics topics.txt [--count 1] ...   (파일에서 앞에서부터 count개를 처리)
 톤: stage neon flat minimal cinema chalk blueprint pastel news docu terminal`);
   process.exit(1);
@@ -55,6 +56,7 @@ for (const topic of topics) {
       topic, tone: args.tone || 'stage', length: args.length || 'standard', voiceId: args.voice || process.env.CARTESIA_VOICE_ID || '',
       source: args.source ? fs.readFileSync(String(args.source), 'utf8') : '', channel: args.channel || '', url: args.url || '',
       lessons, withVoice: !args['no-voice'],
+      fonts: args['font-head'] || args['font-body'] ? { head: args['font-head'] || '', body: args['font-body'] || '' } : null,
     },
   });
 }
