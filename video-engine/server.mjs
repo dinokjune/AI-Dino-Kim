@@ -13,7 +13,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
 import { scanFonts, serveFont, saveFont, scanSystemFonts } from './fonts.mjs';
 import { claudeCost, createLedger, loadJobs, saveJobs } from './usage.mjs';
-import { PROVIDERS, providerKey, providerStatus } from './tts.mjs';
+import { PROVIDERS, providerKey, providerStatus, gcloudStatus } from './tts.mjs';
+import { ENGINES, runCli, detectEngines } from './llm.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 loadDotEnv(path.join(ROOT, '.env'));
@@ -55,7 +56,21 @@ function readBody(req, limit = 2_000_000) {
 
 // ── Claude: 대본·주제 생성 ──
 async function handleClaude(req, res) {
-  const { prompt, system, maxTokens } = await readBody(req);
+  const { prompt, system, maxTokens, engine: reqEngine } = await readBody(req);
+  // 엔진 이름이 잘못 오면 종량제 API로 조용히 넘어가 요금이 나가지 않게 오류로 막는다
+  if (reqEngine && !ENGINES[reqEngine]) return send(res, 400, { error: `알 수 없는 대본 엔진: ${String(reqEngine).slice(0, 40)}` });
+  const engine = reqEngine || (ENGINES[process.env.LLM_ENGINE] ? process.env.LLM_ENGINE : 'claude-api');
+  if (engine !== 'claude-api') {
+    // 내 구독 CLI로 대본 쓰기: 추가 요금 없음 (구독 한도 안에서)
+    if (!prompt) return send(res, 400, { error: 'prompt가 비어 있습니다' });
+    try {
+      const r = await runCli(engine, prompt, { system: system || '너는 한국어 유튜브 설명 영상의 대본 작가다. 요청한 형식의 JSON만 출력한다.' });
+      const tokens = r.usage ? { input: r.usage.input, output: r.usage.output, cacheRead: 0, cacheWrite: 0 } : { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+      const cost = { model: r.model, engine, tokens, usd: 0, subscription: true, priced: true };
+      LEDGER.add({ kind: 'claude', engine, tag: costTag(req), model: r.model, tokens, usd: 0, subscription: true });
+      return send(res, 200, { text: r.text, model: r.model, engine, cost });
+    } catch (e) { return send(res, 502, { error: `${ENGINES[engine].name}: ${e.message}` }); }
+  }
   const apiKey = process.env.ANTHROPIC_API_KEY || req.headers['x-anthropic-key'];
   if (!apiKey) return send(res, 400, { error: 'Anthropic API 키가 없습니다. .env 또는 설정 화면에서 넣어 주세요.' });
   if (!prompt) return send(res, 400, { error: 'prompt가 비어 있습니다' });
@@ -75,7 +90,7 @@ async function handleClaude(req, res) {
     if (msg.stop_reason === 'refusal') return send(res, 422, { error: '모델이 이 요청을 거절했습니다', details: msg.stop_details || null });
     const text = msg.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
     const cost = claudeCost(msg.model, msg.usage);
-    LEDGER.add({ kind: 'claude', tag: costTag(req), model: cost.model, tokens: cost.tokens, usd: cost.usd });
+    LEDGER.add({ kind: 'claude', engine: 'claude-api', tag: costTag(req), model: cost.model, tokens: cost.tokens, usd: cost.usd });
     return send(res, 200, { text, model: msg.model, stop_reason: msg.stop_reason, usage: msg.usage, cost });
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) return send(res, 401, { error: 'Anthropic API 키가 올바르지 않습니다' });
@@ -120,6 +135,8 @@ function serveStatic(req, res) {
   const url = new URL(req.url, 'http://x');
   let rel = decodeURIComponent(url.pathname);
   if (rel === '/') rel = '/studio.html';
+  // 작업·비용 기록은 화면이 API(/api/jobs, /api/ledger)로만 읽는다
+  if (/^\/out\/(jobs\.json|ledger\.jsonl)$/.test(rel)) { res.writeHead(403); return res.end(); }
   if (rel === '/vendor/p5.min.js') rel = '/node_modules/p5/lib/p5.min.js';
   else if (rel === '/vendor/three.module.min.js') rel = '/node_modules/three/build/three.module.min.js';
   else if (rel.startsWith('/node_modules')) { res.writeHead(403); return res.end(); }
@@ -134,6 +151,7 @@ function serveStatic(req, res) {
 
 // ── 작업 대기열: 한 번에 하나씩 헤드리스 브라우저로 처리 ──
 const JOBS = loadJobs(OUT);
+let ENGINE_STATUS = null;
 let running = false;
 
 function publicJob(j) {
@@ -144,6 +162,7 @@ function publicJob(j) {
 function keysFrom(req, body) {
   return {
     anthropicKey: req.headers['x-anthropic-key'] || '', cartesiaKey: req.headers['x-cartesia-key'] || '',
+    llmEngine: ENGINES[body.llmEngine] ? body.llmEngine : '',
     ttsKeys: Object.fromEntries(Object.entries(PROVIDERS).map(([k, p]) => [k, req.headers[p.header] || ''])),
     cartesiaModel: body.cartesiaModel || '', cartesiaVersion: body.cartesiaVersion || '',
   };
@@ -254,6 +273,9 @@ const server = http.createServer(async (req, res) => {
         server: true, claudeModel: CLAUDE_MODEL, cartesiaModel: CARTESIA_MODEL, cartesiaVersion: CARTESIA_VERSION,
         claudeKey: !!process.env.ANTHROPIC_API_KEY, cartesiaKey: !!process.env.CARTESIA_API_KEY, voiceId: !!process.env.CARTESIA_VOICE_ID,
         tts: providerStatus(),
+        llm: ENGINE_STATUS || (ENGINE_STATUS = detectEngines()),
+        llmDefault: ENGINES[process.env.LLM_ENGINE] ? process.env.LLM_ENGINE : 'claude-api',
+        gcloud: await gcloudStatus(),
         youtube: !!(process.env.YT_CLIENT_ID && process.env.YT_CLIENT_SECRET && process.env.YT_REFRESH_TOKEN),
       });
     }

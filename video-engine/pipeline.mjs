@@ -27,6 +27,7 @@ if (!args.topic && !args.topics) {
   console.log(`사용법:
   node pipeline.mjs --topic "주제" [--tone stage] [--length standard|shorts|long] [--voice <Cartesia 목소리 ID>]
                     [--source 참고자료.txt] [--channel "채널 이름"] [--url "채널 주소"] [--no-voice] [--upload]
+                    [--llm claude-api|claude-cli|codex|gemini]   (대본 엔진: API 또는 내 구독 CLI)
                     [--tts cartesia|elevenlabs|openai|google|clova] [--voice <목소리 ID>] [--speed 1.0]
                     [--font-head "글꼴"] [--font-caption "글꼴"] [--font-body "글꼴"] [--font-number "글꼴"]
                     (글꼴: Google Fonts 이름, 설치된 글꼴 이름, 다운로드·fonts 폴더의 파일 이름)
@@ -53,7 +54,7 @@ const { server, jobs, runQueue } = await startServer({ port: 0 });
 for (const topic of topics) {
   jobs.push({
     id: 'cli' + Date.now().toString(36) + jobs.length, kind: 'auto', title: topic, status: 'queued', createdAt: Date.now(), upload: !!args.upload,
-    settings: {},
+    settings: { llmEngine: args.llm ? String(args.llm) : '' },
     payload: {
       topic, tone: args.tone || 'stage', length: args.length || 'standard', voiceId: args.voice || process.env.CARTESIA_VOICE_ID || '',
       source: args.source ? fs.readFileSync(String(args.source), 'utf8') : '', channel: args.channel || '', url: args.url || '',
@@ -89,7 +90,7 @@ for (const j of jobs) {
       const by = c.tts.by && Object.keys(c.tts.by).length ? c.tts.by : { cartesia: c.tts.chars };
       const ttsUsd = Object.entries(by).reduce((a, [k, n]) => a + (n / 1000) * Number(process.env[`${k.toUpperCase()}_USD_PER_1K`] ?? DEF[k] ?? 0), 0);
       const usd = c.claude.usd + ttsUsd;
-      console.log(`  비용: Claude $${c.claude.usd.toFixed(4)} (입력 ${c.claude.input} · 출력 ${c.claude.output} 토큰) + 음성 ${Object.entries(by).map(([k, n]) => `${k} ${n}자`).join(', ')}($${ttsUsd.toFixed(4)}) = $${usd.toFixed(4)} ≈ ₩${Math.round(usd * krw).toLocaleString('ko-KR')}`);
+      console.log(`  비용: 대본 ${c.claude.subscription ? `내 구독(${c.claude.engine}) 추가 요금 없음` : `$${c.claude.usd.toFixed(4)}`} (입력 ${c.claude.input} · 출력 ${c.claude.output} 토큰) + 음성 ${Object.entries(by).map(([k, n]) => `${k} ${n}자`).join(', ')}($${ttsUsd.toFixed(4)}) = $${usd.toFixed(4)} ≈ ₩${Math.round(usd * krw).toLocaleString('ko-KR')}`);
     }
     if (j.youtube) console.log(`  유튜브(비공개): ${j.youtube.url}`);
     (j.log || []).filter((l) => !l.startsWith('비용:')).forEach((l) => console.log(`  · ${l}`));

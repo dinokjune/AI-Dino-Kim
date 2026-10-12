@@ -54,6 +54,8 @@ function addCost(c, target) {
     v.claude.output += c.tokens.output || 0;
     v.claude.usd += c.usd || 0;
     v.claude.calls++;
+    if (c.engine) v.claude.engine = c.engine;
+    if (c.subscription) v.claude.subscription = true;
   }
   if (c.chars) {
     v.tts.chars += c.chars; v.tts.calls++;

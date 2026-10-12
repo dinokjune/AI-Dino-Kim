@@ -18,6 +18,21 @@ MP4를 만들려면 **ffmpeg**가 필요합니다(윈도우: `winget install Gya
 
 키를 `.env` 대신 스튜디오의 ⚙ 설정에 넣어도 됩니다(브라우저에만 저장, 로컬 서버로만 전송). 서버 없이 `studio.html`을 파일로 열면 **오프라인 모드**로 동작합니다. 이때는 "프롬프트 복사"로 Claude 대화창에서 대본을 받아 "JSON 붙여넣기"로 넣고, 음성 대신 브라우저 TTS로 미리 듣습니다.
 
+## 대본을 쓰는 AI: API 또는 내 구독
+
+2번 단계의 "대본을 쓸 AI"에서 고릅니다. 구독 엔진은 내가 이미 로그인해 둔 CLI를 불러 쓰므로 **추가 요금이 없고**(구독 사용 한도 안에서), 비용 표에는 "구독"으로 표시됩니다.
+
+| 선택 | 쓰는 것 | 준비 |
+|---|---|---|
+| Claude API (종량제) | Anthropic API 키 · claude-opus-5-5 | `.env`의 `ANTHROPIC_API_KEY` |
+| Claude Code (내 Claude 구독) | `claude -p` | Claude Code 설치 후 `claude` 실행해 로그인 |
+| Codex (내 ChatGPT 구독) | `codex exec` (읽기 전용 모드) | `npm i -g @openai/codex` 후 `codex login` → "Sign in with ChatGPT" |
+| Gemini CLI (내 Google 구독) | `gemini -p` | `npm i -g @google/gemini-cli` 후 `gemini` 실행해 Google 계정으로 로그인 |
+
+CLI는 빈 임시 폴더에서 실행되고 프롬프트는 표준 입력으로 넘어가서 내 파일을 건드리지 않습니다. 설치를 마친 뒤에는 서버를 다시 켜야 목록에 "설치됨"으로 잡힙니다. 기본값은 `.env`의 `LLM_ENGINE=codex`처럼 정할 수 있고, 예약 실행에서는 `--llm codex`를 씁니다.
+
+**구독으로 안 되는 것**: 음성(TTS)은 구독에 포함되지 않습니다. ChatGPT 구독에는 API 사용이 들어 있지 않아(OpenAI 안내) OpenAI 음성은 API 키가 있어야 하고, Codex·Gemini CLI는 음성을 만들지 못합니다. **Google 음성은 API 키 대신 gcloud CLI 로그인으로 쓸 수 있습니다** – `gcloud auth login` 후 `gcloud config set project <프로젝트 ID>`(Text-to-Speech API 사용 설정)만 하면 키 없이 동작합니다. 이때 요금은 구독이 아니라 그 Google Cloud 프로젝트 기준이며, 월 100만 자 무료 구간(Neural2·WaveNet 기준)이 있습니다.
+
 ## 사용 순서
 
 1. **톤 카드 고르기**: 11장 중 하나를 고릅니다. 카드마다 주인공·바탕·색·글꼴·자막·움직임·전환·카메라·효과음·음악·금지 사항과 목표 숫자(장면 길이·밝기·움직임)가 정해져 있고, 고르면 미리보기가 바로 그 톤으로 바뀝니다.
@@ -29,7 +44,7 @@ MP4를 만들려면 **ffmpeg**가 필요합니다(윈도우: `winget install Gya
    | Cartesia | 내 클론 목소리 · 글자당 약 1크레딧 | 단어별 시간표 | `CARTESIA_API_KEY` |
    | ElevenLabs | 내 클론 목소리 · eleven_multilingual_v2 | 글자별 시간표 → 단어 | `ELEVENLABS_API_KEY` |
    | OpenAI | 고정 목소리 11종 · gpt-4o-mini-tts | 글자 수 비례 | `OPENAI_API_KEY` |
-   | Google Cloud | 한국어 목소리 다수 (Neural2·Chirp3-HD 등) · 월 100만 자 무료 구간 | 글자 수 비례 | `GOOGLE_TTS_API_KEY` |
+   | Google Cloud | 한국어 목소리 다수 (Neural2·Chirp3-HD 등) · 월 100만 자 무료 구간 | 글자 수 비례 | `GOOGLE_TTS_API_KEY` 또는 **gcloud 로그인(키 없이)** |
    | 네이버 클로바 | 한국어 전용 화자 (nara, nminsang …) | 글자 수 비례 | `CLOVA_CLIENT_ID` · `CLOVA_CLIENT_SECRET` |
 
    키는 `.env`나 ⚙ 설정에 넣습니다. 비용은 서비스별로 따로 계산되고, 1,000자당 단가는 설정에서 바꿀 수 있습니다(클로바는 네이버 클라우드 요금표를 확인해 넣으세요).
@@ -99,6 +114,7 @@ video-engine/
 ├─ produce.mjs         헤드리스 제작기: 대본·음성·검수 자동 실행 + 프레임 렌더 → ffmpeg MP4
 ├─ pipeline.mjs        예약 실행용 CLI (주제 파일 → MP4 → 선택: 유튜브 업로드)
 ├─ youtube.mjs         유튜브 비공개 업로드 + 최초 인증(auth)
+├─ llm.mjs             대본 엔진: Claude Code · Codex · Gemini CLI (내 구독)
 ├─ tts.mjs             TTS 공급자 5종 (Cartesia · ElevenLabs · OpenAI · Google · 클로바)
 ├─ fonts.mjs           글꼴 찾기: 설치된 글꼴 · 다운로드 · fonts 폴더 (zip 포함, 이름·한글 지원 해석)
 ├─ usage.mjs           Claude 단가표 · 사용량 기록(out/ledger.jsonl) · 작업 목록 저장

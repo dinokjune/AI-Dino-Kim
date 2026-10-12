@@ -9,8 +9,41 @@ const settings = () => store.get('settings', {});
 let SERVER = null; // /api/status 결과, 없으면 오프라인
 
 // ── 서버 호출 ──
+// 대본 엔진: API(종량제) 또는 내 구독 CLI
+const LLM_NAMES = { 'claude-api': 'Claude API (종량제)', 'claude-cli': 'Claude Code (내 Claude 구독)', codex: 'Codex (내 ChatGPT 구독)', gemini: 'Gemini CLI (내 Google 구독)' };
+const LLM_NOTES = {
+  'claude-api': 'Anthropic API 키로 실행 · 쓴 토큰만큼 요금 (claude-opus-5-5)',
+  'claude-cli': 'Claude Code에 로그인한 내 구독으로 실행 · 추가 요금 없음 (구독 사용 한도 안에서)',
+  codex: 'ChatGPT 계정으로 로그인한 Codex CLI로 실행 · 추가 요금 없음 (구독 사용 한도 안에서)',
+  gemini: 'Google 계정으로 로그인한 Gemini CLI로 실행 · 추가 요금 없음 (구독·무료 한도 안에서)',
+};
+function llmEngine() { return (settings().llmEngine) || (SERVER && SERVER.llmDefault) || 'claude-api'; }
+function llmReady(e) {
+  if (!SERVER) return false;
+  if (e === 'claude-api') return !!(SERVER.claudeKey || settings().anthropicKey);
+  return !!(SERVER.llm && SERVER.llm[e] && SERVER.llm[e].installed);
+}
+function renderLlmSelect() {
+  const sel = $('llm-engine'); if (!sel) return;
+  const cur = llmEngine();
+  sel.innerHTML = '';
+  Object.entries(LLM_NAMES).forEach(([k, v]) => {
+    const o = document.createElement('option'); o.value = k;
+    const inst = SERVER && SERVER.llm && SERVER.llm[k];
+    o.textContent = v + (k !== 'claude-api' && inst && !inst.installed ? ' – 설치 안 됨' : '');
+    sel.appendChild(o);
+  });
+  sel.value = cur;
+  const ok = llmReady(cur);
+  $('llm-note').textContent = (LLM_NOTES[cur] || '') + (ok ? '' : cur === 'claude-api' ? ' · ⚠ API 키 없음' : ' · ⚠ 이 컴퓨터에서 명령을 찾지 못했습니다 (설치·로그인 후 서버 재시작)');
+  const b = $('st-claude');
+  b.textContent = `${{ 'claude-api': 'Claude API', 'claude-cli': 'Claude 구독', codex: 'GPT 구독', gemini: 'Gemini 구독' }[cur]} ${ok ? '준비' : '확인 필요'}`;
+  b.className = 'badge ' + (ok ? 'on' : 'off');
+}
+
 async function api(path, body, tag) {
   const s = settings();
+  if (path === '/api/claude' && !body.engine) body = { ...body, engine: llmEngine() };
   const headers = { 'Content-Type': 'application/json' };
   const t = tag || (SCRIPT && (META().topic || META().title)) || '';
   if (t) headers['x-cost-tag'] = encodeURIComponent(t);
@@ -38,6 +71,7 @@ async function checkServer() {
   set('st-claude', SERVER && (SERVER.claudeKey || s.anthropicKey), 'Claude ' + (SERVER && (SERVER.claudeKey || s.anthropicKey) ? '준비' : '키 없음'));
   const tp = currentTTS().provider, tReady = ttsReady(tp);
   set('st-voice', tReady, `${TTS_NAMES[tp]} ` + (tReady ? '준비' : '키 없음'));
+  renderLlmSelect();
   $('btn-script').disabled = !SERVER;
   $('btn-topics').disabled = !SERVER;
   $('btn-voice').disabled = !SERVER;
@@ -497,6 +531,7 @@ function updateEstimate() {
   const el = $('estimate'); if (!el) return;
   const topic = $('topic').value.trim();
   const e = estimateNew($('length').value, buildScriptPrompt({ topic: topic || '주제', card: selectedCard(), length: $('length').value, source: $('source').value.trim(), lessons: store.get('lessons', []) }));
+  if (llmEngine() !== 'claude-api') { el.textContent = `예상 비용(대략): 대본은 내 구독으로 추가 요금 없음 + 음성 약 ${fmtNum(e.credits)}${currentTTS().provider === 'cartesia' ? '크레딧' : '자'}(${fmtUsd(e.tts)}) ≈ ${fmtKrw(e.tts * costSettings().krw)}`; return; }
   el.textContent = `예상 비용(대략): 대본 ${fmtUsd(e.claudeLo)}~${fmtUsd(e.claudeHi)} + 음성 약 ${fmtNum(e.credits)}크레딧(${fmtUsd(e.tts)}) ≈ ${fmtKrw(e.krwLo)}~${fmtKrw(e.krwHi)} · 숫자 검문으로 대본을 다시 쓰면 대본 비용이 최대 2배`;
 }
 
@@ -515,7 +550,9 @@ function renderCost() {
   const pendChars = pendingTtsChars();
   const pendUsd = tt.provider === 'cartesia' ? pendChars * cs.creditMult * cs.usdPerCredit : (pendChars / 1000) * ttsRatePer1k(tt.provider, tt.voiceId, tt.model);
   const rows = [
-    ['대본 (Claude)', c.claude.calls ? `${fmtNum(c.claude.input)} 입력 · ${fmtNum(c.claude.output)} 출력 토큰` : '아직 없음', fmtUsd(p.claudeUsd)],
+    [`대본 (${c.claude.engine ? (LLM_NAMES[c.claude.engine] || c.claude.engine).replace(/ \(.*\)/, '') : 'Claude'})`,
+      !c.claude.calls ? '아직 없음' : c.claude.subscription ? `내 구독으로 처리 · 추가 요금 없음${c.claude.input ? ` (${fmtNum(c.claude.input)}→${fmtNum(c.claude.output)} 토큰)` : ''}` : `${fmtNum(c.claude.input)} 입력 · ${fmtNum(c.claude.output)} 출력 토큰`,
+      c.claude.subscription && !p.claudeUsd ? '구독' : fmtUsd(p.claudeUsd)],
     ['음성 (TTS)', c.tts.calls ? Object.entries(p.by).map(([k, n]) => `${TTS_NAMES[k] || k} ${fmtNum(k === 'cartesia' ? n * cs.creditMult : n)}${k === 'cartesia' ? '크레딧' : '자'}`).join(' · ') : '아직 없음', fmtUsd(p.ttsUsd)],
     ['렌더 · 검수', '내 컴퓨터에서 처리', '$0'],
   ];
@@ -616,7 +653,7 @@ let jobTimer = null;
 
 function jobBody(extra) {
   const s = settings();
-  return Object.assign({ cartesiaModel: s.cartesiaModel || '', cartesiaVersion: s.cartesiaVersion || '' }, extra);
+  return Object.assign({ cartesiaModel: s.cartesiaModel || '', cartesiaVersion: s.cartesiaVersion || '', llmEngine: llmEngine() }, extra);
 }
 
 async function renderMP4() {
@@ -744,6 +781,7 @@ const UI = {
     $('btn-qa').onclick = doQA;
     $('btn-mp4').onclick = renderMP4;
     $('btn-all').onclick = makeAll;
+    $('llm-engine').onchange = () => { const s = settings(); s.llmEngine = $('llm-engine').value; store.set('settings', s); renderLlmSelect(); updateEstimate(); renderCost(); };
     initVoicePickers();
     Object.entries(CARTESIA_PLANS).forEach(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v.label; $('c-plan').appendChild(o); });
     $('c-plan').onchange = () => { $('c-per1k-wrap').hidden = $('c-plan').value !== 'custom'; };

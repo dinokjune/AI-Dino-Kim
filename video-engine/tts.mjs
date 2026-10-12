@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process';
+
 // TTS 공급자 모음: Cartesia · ElevenLabs · OpenAI · Google Cloud · 네이버 클로바 보이스
 // 모두 같은 형태로 돌려준다: { audio: Buffer, mime, words: [{w,start,end}], note }
 // words(단어 시간표)는 Cartesia·ElevenLabs만 있고, 나머지는 자막을 글자 수 비례로 맞춘다.
@@ -123,14 +125,56 @@ async function openaiSynth({ key, voiceId, text, model, speed }) {
 }
 
 // ── Google Cloud Text-to-Speech ──
+// 인증 두 가지: API 키, 또는 API 키 없이 gcloud CLI 로그인(내 Google 계정). 키가 없으면 gcloud 를 쓴다.
 const GOOGLE = () => env('GOOGLE_TTS_BASE_URL', 'https://texttospeech.googleapis.com');
+const IS_WIN = process.platform === 'win32';
+let gcloudCache = { token: null, project: null, at: 0, error: null };
+
+function gcloudRun(args) {
+  const r = spawnSync(env('GCLOUD_BIN', 'gcloud'), args, { encoding: 'utf8', shell: IS_WIN, timeout: 30000 });
+  if (r.error || r.status !== 0) throw new Error((r.stderr || (r.error && r.error.message) || '').trim().split('\n').slice(-2).join(' ') || 'gcloud 실행 실패');
+  return (r.stdout || '').trim();
+}
+
+// gcloud 로그인 토큰 (40분 캐시). 사용자 로그인 → 실패하면 애플리케이션 기본 사용자 인증 순서로 시도
+export function gcloudAuth(force = false) {
+  // 성공한 토큰은 40분, 실패는 2분 동안 다시 묻지 않는다 (상태 확인 때마다 gcloud 를 띄우지 않게)
+  if (!force && gcloudCache.at && Date.now() - gcloudCache.at < (gcloudCache.token ? 40 : 2) * 60 * 1000) return gcloudCache;
+  try {
+    let token;
+    try { token = gcloudRun(['auth', 'print-access-token']); }
+    catch { token = gcloudRun(['auth', 'application-default', 'print-access-token']); }
+    let project = env('GOOGLE_CLOUD_PROJECT', '');
+    if (!project) { try { project = gcloudRun(['config', 'get-value', 'project']); } catch { project = ''; } }
+    gcloudCache = { token, project: project && project !== '(unset)' ? project : '', at: Date.now(), error: null };
+  } catch (e) {
+    gcloudCache = { token: null, project: null, at: Date.now(), error: `gcloud 로그인이 필요합니다 (gcloud auth login): ${e.message}` };
+  }
+  return gcloudCache;
+}
+
+export async function gcloudStatus() {
+  if (env('GOOGLE_TTS_API_KEY')) return { mode: 'apikey' };
+  const g = gcloudAuth();
+  return g.token ? { mode: 'gcloud', project: g.project || '' } : { mode: 'none', error: g.error };
+}
+
+function googleAuthHeaders(key) {
+  if (key && key !== 'gcloud') return { url: `key=${encodeURIComponent(key)}`, headers: {} };
+  const g = gcloudAuth();
+  if (!g.token) throw new Error(g.error || 'Google 인증 정보가 없습니다');
+  const headers = { Authorization: `Bearer ${g.token}` };
+  if (g.project) headers['x-goog-user-project'] = g.project; // 사용자 로그인일 때 요금·할당량을 계산할 프로젝트
+  return { url: '', headers };
+}
 
 async function googleSynth({ key, voiceId, text, speed, language }) {
   const name = voiceId || 'ko-KR-Neural2-A';
   const audioConfig = { audioEncoding: 'LINEAR16', sampleRateHertz: 44100 };
   if (speed && speed !== 1) audioConfig.speakingRate = speed;
-  const r = await fetch(`${GOOGLE()}/v1/text:synthesize?key=${encodeURIComponent(key)}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+  const auth = googleAuthHeaders(key);
+  const r = await fetch(`${GOOGLE()}/v1/text:synthesize${auth.url ? '?' + auth.url : ''}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...auth.headers },
     body: JSON.stringify({ input: { text }, voice: { languageCode: name.split('-').slice(0, 2).join('-') || (language === 'ko' ? 'ko-KR' : language), name }, audioConfig }),
   });
   if (!r.ok) await fail(r, 'Google TTS');
@@ -139,7 +183,8 @@ async function googleSynth({ key, voiceId, text, speed, language }) {
 }
 
 async function googleVoices({ key }) {
-  const r = await fetch(`${GOOGLE()}/v1/voices?languageCode=ko-KR&key=${encodeURIComponent(key)}`);
+  const auth = googleAuthHeaders(key);
+  const r = await fetch(`${GOOGLE()}/v1/voices?languageCode=ko-KR${auth.url ? '&' + auth.url : ''}`, { headers: auth.headers });
   if (!r.ok) await fail(r, 'Google 목소리 목록');
   const j = await r.json();
   return (j.voices || []).map((v) => ({ id: v.name, name: `${v.name} (${v.ssmlGender === 'FEMALE' ? '여' : v.ssmlGender === 'MALE' ? '남' : '중립'})`, lang: 'ko' }));
@@ -169,7 +214,7 @@ export const PROVIDERS = {
   cartesia: { name: 'Cartesia', envKey: () => env('CARTESIA_API_KEY'), header: 'x-cartesia-key', envVoice: () => env('CARTESIA_VOICE_ID'), synth: cartesiaSynth, voices: cartesiaVoices, timestamps: true },
   elevenlabs: { name: 'ElevenLabs', envKey: () => env('ELEVENLABS_API_KEY'), header: 'x-elevenlabs-key', envVoice: () => env('ELEVENLABS_VOICE_ID'), synth: elevenSynth, voices: elevenVoices, timestamps: true },
   openai: { name: 'OpenAI', envKey: () => env('OPENAI_API_KEY'), header: 'x-openai-key', envVoice: () => env('OPENAI_TTS_VOICE', 'alloy'), synth: openaiSynth, voices: async () => OPENAI_VOICES.map((v) => ({ id: v, name: v })) },
-  google: { name: 'Google Cloud', envKey: () => env('GOOGLE_TTS_API_KEY'), header: 'x-google-key', envVoice: () => env('GOOGLE_TTS_VOICE', 'ko-KR-Neural2-A'), synth: googleSynth, voices: googleVoices },
+  google: { name: 'Google Cloud', envKey: () => env('GOOGLE_TTS_API_KEY') || (gcloudAuth().token ? 'gcloud' : ''), header: 'x-google-key', envVoice: () => env('GOOGLE_TTS_VOICE', 'ko-KR-Neural2-A'), synth: googleSynth, voices: googleVoices },
   clova: {
     name: '네이버 클로바', envKey: () => (env('CLOVA_CLIENT_ID') ? `${env('CLOVA_CLIENT_ID')}|${env('CLOVA_CLIENT_SECRET', '')}` : ''),
     header: 'x-clova-key', envVoice: () => env('CLOVA_SPEAKER', 'nara'), synth: clovaSynth, voices: async () => CLOVA_VOICES.map(([id, name]) => ({ id, name, lang: 'ko' })),
