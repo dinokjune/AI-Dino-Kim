@@ -6,5 +6,5 @@ if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) { Write-Host 'ffmpe
 Write-Host '패키지 설치 중...'; npm install
 Write-Host 'MP4 렌더용 크롬 설치 중...'; npx playwright install chromium
 if (-not (Test-Path .env)) { Copy-Item .env.example .env; Write-Host '.env 를 만들었습니다. 키는 나중에 스튜디오 ⚙ 설정에서 넣어도 됩니다.' }
-Start-Process 'http://127.0.0.1:8787'
+Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-Command','Start-Sleep 3; Start-Process http://127.0.0.1:8787'
 node server.mjs

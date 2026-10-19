@@ -14,6 +14,8 @@ cp .env.example .env     # ANTHROPIC_API_KEY, CARTESIA_API_KEY, CARTESIA_VOICE_I
 npm start                # http://127.0.0.1:8787
 ```
 
+**윈도우에서 다시 켤 때는 `video-engine` 폴더의 `start-studio.cmd`를 더블클릭**하면 됩니다. 서버가 켜지고 몇 초 뒤 브라우저가 열립니다. 그 검은 창이 서버이므로 쓰는 동안 닫지 마세요. 창을 닫거나 PC를 재부팅하면 서버가 꺼져 "연결을 거부했습니다"가 뜹니다.
+
 MP4를 만들려면 **ffmpeg**가 필요합니다(윈도우: `winget install Gyan.FFmpeg`, 맥: `brew install ffmpeg`). PATH에 없으면 `.env`의 `FFMPEG_PATH`에 경로를 적으세요.
 
 키를 `.env` 대신 스튜디오의 ⚙ 설정에 넣어도 됩니다(브라우저에만 저장, 로컬 서버로만 전송). 서버 없이 `studio.html`을 파일로 열면 **오프라인 모드**로 동작합니다. 이때는 "프롬프트 복사"로 Claude 대화창에서 대본을 받아 "JSON 붙여넣기"로 넣고, 음성 대신 브라우저 TTS로 미리 듣습니다.
