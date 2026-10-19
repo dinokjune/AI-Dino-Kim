@@ -35,6 +35,15 @@ CLI는 빈 임시 폴더에서 실행되고 프롬프트는 표준 입력으로 
 
 **구독으로 안 되는 것**: 음성(TTS)은 구독에 포함되지 않습니다. ChatGPT 구독에는 API 사용이 들어 있지 않아(OpenAI 안내) OpenAI 음성은 API 키가 있어야 하고, Codex·Gemini CLI는 음성을 만들지 못합니다. **Google 음성은 API 키 대신 gcloud CLI 로그인으로 쓸 수 있습니다** – `gcloud auth login` 후 `gcloud config set project <프로젝트 ID>`(Text-to-Speech API 사용 설정)만 하면 키 없이 동작합니다. 이때 요금은 구독이 아니라 그 Google Cloud 프로젝트 기준이며, 월 100만 자 무료 구간(Neural2·WaveNet 기준)이 있습니다.
 
+## 내 목소리: 경제음성 (내 PC, 무료)
+
+`D:/Claude/Projects/my-voice-clone/myvoice.cmd`(경제음성 스킬의 로컬 Qwen3-TTS 클론, 목소리 `kkwabaegi`)가 있으면 3번 단계의 기본 목소리가 **경제음성 (내 PC)**로 잡힙니다. 유료 API를 쓰지 않습니다.
+
+- 모델을 띄우는 데 약 2분이 걸리므로, 장면을 한 줄씩 모은 원고로 **한 번만** 부르고 결과 `timing.json`(문장별 시작·끝)으로 장면마다 잘라 씁니다. 자막도 이 시간표에 맞춥니다.
+- 속도는 RTX 3060 기준 음성 1초에 약 6초입니다(README 실측). 2~3분 영상은 15~20분, 10분 영상은 약 1시간이 걸리고, 화면에 "n/총 문장 · 남은 시간"이 표시됩니다.
+- 속도 슬라이더는 적용되지 않습니다. 숫자·영어는 발음을 듣고 필요하면 대본에서 한글로 풀어 쓰세요.
+- 경로·목소리는 `.env`의 `MYVOICE_CMD`, `MYVOICE_VOICE`로 바꿀 수 있습니다. 예약 실행은 `--tts local`.
+
 ## 사용 순서
 
 1. **톤 카드 고르기**: 11장 중 하나를 고릅니다. 카드마다 주인공·바탕·색·글꼴·자막·움직임·전환·카메라·효과음·음악·금지 사항과 목표 숫자(장면 길이·밝기·움직임)가 정해져 있고, 고르면 미리보기가 바로 그 톤으로 바뀝니다.
@@ -43,6 +52,7 @@ CLI는 빈 임시 폴더에서 실행되고 프롬프트는 표준 입력으로 
 
    | TTS 서비스 | 특징 | 자막 맞춤 | .env 키 |
    |---|---|---|---|
+   | 경제음성 (내 PC) | 로컬 Qwen3-TTS 클론 kkwabaegi · 무료 · 느림(음성 1초에 약 6초) | 문장별 시간표 → 단어 | 키 없음 (`MYVOICE_CMD`) |
    | Cartesia | 내 클론 목소리 · 글자당 약 1크레딧 | 단어별 시간표 | `CARTESIA_API_KEY` |
    | ElevenLabs | 내 클론 목소리 · eleven_multilingual_v2 | 글자별 시간표 → 단어 | `ELEVENLABS_API_KEY` |
    | OpenAI | 고정 목소리 11종 · gpt-4o-mini-tts | 글자 수 비례 | `OPENAI_API_KEY` |

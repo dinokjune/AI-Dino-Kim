@@ -13,7 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
 import { scanFonts, serveFont, saveFont, scanSystemFonts } from './fonts.mjs';
 import { claudeCost, createLedger, loadJobs, saveJobs } from './usage.mjs';
-import { PROVIDERS, providerKey, providerStatus, gcloudStatus } from './tts.mjs';
+import { PROVIDERS, providerKey, providerStatus, gcloudStatus, localBatch, LOCAL_PROGRESS } from './tts.mjs';
 import { ENGINES, runCli, detectEngines, pickDefaultEngine } from './llm.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -107,7 +107,7 @@ async function handleTTS(req, res) {
   const P = PROVIDERS[provider];
   const key = providerKey(provider, req);
   const voiceId = body.voiceId || P.envVoice();
-  if (!key) return send(res, 400, { error: `${P.name} API 키가 없습니다. .env 또는 ⚙ 설정에서 넣어 주세요.` });
+  if (!key) return send(res, 400, { error: provider === 'local' ? `경제음성 실행 파일이 없습니다: ${process.env.MYVOICE_CMD || 'D:/Claude/Projects/my-voice-clone/myvoice.cmd'} (.env 의 MYVOICE_CMD 로 바꿀 수 있습니다)` : `${P.name} API 키가 없습니다. .env 또는 ⚙ 설정에서 넣어 주세요.` });
   if (!voiceId) return send(res, 400, { error: `${P.name} 목소리를 골라 주세요.` });
   if (!body.text) return send(res, 400, { error: 'text가 비어 있습니다' });
   let out;
@@ -120,12 +120,28 @@ async function handleTTS(req, res) {
   return send(res, 200, { audio: out.audio.toString('base64'), mime: out.mime, words: out.words || [], note: out.note || null, cost: { provider, chars, credits: chars } });
 }
 
+// 경제음성(내 PC) 여러 장면을 한 번에: 모델 로딩을 한 번만 하고 장면별 WAV·단어 시간표로 나눠 돌려준다
+async function handleTTSBatch(req, res) {
+  const body = await readBody(req, 5_000_000);
+  if (!PROVIDERS.local.envKey()) return send(res, 400, { error: `경제음성 실행 파일이 없습니다: ${process.env.MYVOICE_CMD || 'D:/Claude/Projects/my-voice-clone/myvoice.cmd'}` });
+  const texts = (body.texts || []).map((t) => String(t || ''));
+  if (!texts.length) return send(res, 400, { error: 'texts가 비어 있습니다' });
+  const voiceId = body.voiceId || PROVIDERS.local.envVoice();
+  let items;
+  try { items = await localBatch({ voiceId, texts }); } catch (e) { return send(res, 502, { error: e.message }); }
+  const chars = texts.reduce((n, t) => n + [...t].length, 0);
+  LEDGER.add({ kind: 'tts', tag: costTag(req), provider: 'local', model: 'Qwen3-TTS-12Hz-1.7B-Base', voice: voiceId, chars });
+  return send(res, 200, {
+    items: items.map((r, i) => r && { audio: r.audio.toString('base64'), mime: r.mime, words: r.words, cost: { provider: 'local', chars: [...texts[i]].length, credits: 0 } }),
+  });
+}
+
 async function handleVoices(req, res) {
   const provider = new URL(req.url, 'http://x').searchParams.get('provider');
   const P = PROVIDERS[provider];
   if (!P) return send(res, 400, { error: '알 수 없는 TTS 공급자' });
   const key = providerKey(provider, req);
-  if (!key && !['openai', 'clova'].includes(provider)) return send(res, 400, { error: `${P.name} API 키가 있어야 목소리 목록을 불러올 수 있습니다` });
+  if (!key && !['openai', 'clova', 'local'].includes(provider)) return send(res, 400, { error: `${P.name} API 키가 있어야 목소리 목록을 불러올 수 있습니다` });
   try { return send(res, 200, { voices: await P.voices({ key }) }); }
   catch (e) { return send(res, 502, { error: e.message }); }
 }
@@ -295,6 +311,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/api/jobs') return await handleJobs(req, res);
     if (req.method === 'POST' && req.url === '/api/claude') return await handleClaude(req, res);
     if (req.method === 'POST' && req.url === '/api/tts') return await handleTTS(req, res);
+    if (req.method === 'POST' && req.url === '/api/tts-batch') return await handleTTSBatch(req, res);
+    if (req.method === 'GET' && req.url === '/api/tts-progress') return send(res, 200, LOCAL_PROGRESS);
     if (req.method === 'GET' && req.url.startsWith('/api/voices')) return await handleVoices(req, res);
     if (req.method === 'GET') return serveStatic(req, res);
     res.writeHead(405); res.end();

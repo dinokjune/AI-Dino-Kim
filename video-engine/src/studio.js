@@ -65,6 +65,12 @@ async function checkServer() {
     const r = await fetch('/api/status');
     SERVER = r.ok ? await r.json() : null;
   } catch (e) { SERVER = null; }
+  // 경제음성이 처음 잡히면 한 번만 기본 목소리로 바꾼다 (그 뒤에 사용자가 고른 공급자는 그대로 둔다)
+  if (SERVER && SERVER.tts && SERVER.tts.local && SERVER.tts.local.key && !store.get('localVoiceApplied', false)) {
+    store.set('localVoiceApplied', true);
+    store.set('tts', defaultTTS());
+    if ($('tts-provider') && $('tts-provider').options.length) { $('tts-provider').value = 'local'; $('voice-id').value = ''; loadVoiceList(1).then(saveTTSChoice); }
+  }
   const s = settings();
   const set = (id, on, txt) => { const el = $(id); el.textContent = txt; el.className = 'badge ' + (on ? 'on' : 'off'); };
   set('st-server', !!SERVER, SERVER ? '서버 연결됨' : '오프라인 모드');
@@ -322,16 +328,21 @@ async function restoreVoices() {
 }
 
 // ── 3. 목소리 (TTS 공급자 여러 개) ──
-const TTS_NAMES = { cartesia: 'Cartesia', elevenlabs: 'ElevenLabs', openai: 'OpenAI', google: 'Google Cloud', clova: '네이버 클로바' };
+const TTS_NAMES = { local: '경제음성 (내 PC)', cartesia: 'Cartesia', elevenlabs: 'ElevenLabs', openai: 'OpenAI', google: 'Google Cloud', clova: '네이버 클로바' };
 const TTS_NOTES = {
+  local: '내 PC의 로컬 Qwen3-TTS 클론 목소리 kkwabaegi (경제음성 스킬) · 유료 API 없음 · 문장 시간표로 자막을 맞춤 · 장면을 하나씩 차례로 만들어 시간이 걸림',
   cartesia: '내 클론 목소리 사용 가능 · 단어별 시간표로 자막이 말과 정확히 맞음 · 글자당 약 1크레딧',
   elevenlabs: '내 클론 목소리 사용 가능 · 글자별 시간표로 자막이 말과 정확히 맞음 · 모델 eleven_multilingual_v2',
   openai: '고정 목소리 11종 · 모델 gpt-4o-mini-tts · 자막은 글자 수 비례',
   google: '한국어 목소리 다수 (ko-KR-Neural2·Chirp3-HD 등) · 월 100만 자 무료 구간 · 자막은 글자 수 비례',
   clova: '한국어 전용 화자 · 네이버 클라우드에서 CLOVA Voice 사용 설정 필요 · 자막은 글자 수 비례',
 };
-const TTS_DEFAULT_VOICES = { openai: 'alloy', google: 'ko-KR-Neural2-A', clova: 'nara' };
+const TTS_DEFAULT_VOICES = { local: 'kkwabaegi', openai: 'alloy', google: 'ko-KR-Neural2-A', clova: 'nara' };
 
+// 기본 목소리: 내 PC에 경제음성이 있으면 그것, 없으면 Cartesia
+function defaultTTS(voiceId = '') {
+  return SERVER && SERVER.tts && SERVER.tts.local && SERVER.tts.local.key ? { provider: 'local', voiceId: 'kkwabaegi', speed: 1 } : { provider: 'cartesia', voiceId, speed: 1 };
+}
 function ttsReady(provider) {
   const s = settings(), tk = s.ttsKeys || {};
   const local = provider === 'cartesia' ? s.cartesiaKey : provider === 'clova' ? tk.clovaId : tk[provider];
@@ -392,12 +403,12 @@ function checkBadges() {
 
 function initVoicePickers() {
   ['tts-provider', 'tts2-provider'].forEach((id) => Object.entries(TTS_NAMES).forEach(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v; $(id).appendChild(o); }));
-  const t1 = store.get('tts', null) || { provider: 'cartesia', voiceId: store.get('f.voice-id', ''), speed: 1 };
+  const t1 = store.get('tts', null) || defaultTTS(store.get('f.voice-id', ''));
   const t2 = store.get('tts2', null) || { provider: 'openai', voiceId: '', on: false };
   $('tts-provider').value = t1.provider; $('tts2-provider').value = t2.provider;
   $('tts-speed').value = t1.speed || 1;
   $('tts2-on').checked = !!t2.on;
-  const known = (p, id) => (store.get(`voices.${p}`, []) || []).some((v) => v.id === id) || ['openai', 'clova'].includes(p);
+  const known = (p, id) => (store.get(`voices.${p}`, []) || []).some((v) => v.id === id) || ['openai', 'clova', 'local'].includes(p);
   $('voice-id').value = t1.voiceId && !known(t1.provider, t1.voiceId) ? t1.voiceId : '';
   $('voice2-id').value = t2.voiceId && !known(t2.provider, t2.voiceId) ? t2.voiceId : '';
   if (t2.on) $('tts2-box').open = true;
@@ -412,22 +423,48 @@ function initVoicePickers() {
   $('tts-speed').oninput = saveTTSChoice;
   $('tts2-on').onchange = saveTTSChoice;
   // 고정 목록(OpenAI·클로바)이나 저장해 둔 목록은 바로 채운다
-  [1, 2].forEach((n) => { const p = $(`tts${n === 2 ? '2' : ''}-provider`).value; const c = store.get(`voices.${p}`, null); if (c || ['openai', 'clova'].includes(p)) loadVoiceList(n); else fillVoiceSelect($(`tts${n === 2 ? '2' : ''}-voice`), [], ''); });
+  [1, 2].forEach((n) => { const p = $(`tts${n === 2 ? '2' : ''}-provider`).value; const c = store.get(`voices.${p}`, null); if (c || ['openai', 'clova', 'local'].includes(p)) loadVoiceList(n); else fillVoiceSelect($(`tts${n === 2 ? '2' : ''}-voice`), [], ''); });
   saveTTSChoice();
 }
 
 // 장면마다 정해진 목소리로 음성을 만든다. 실패하면 예외를 던진다 (화면 버튼과 자동 제작이 같이 쓴다)
-async function generateVoices({ tts, tts2 = null, voiceId, onProgress } = {}) {
+async function generateVoices({ tts, tts2 = null, voiceId, onProgress, onLocalProgress } = {}) {
   const s = settings();
-  if (!tts) tts = { provider: 'cartesia', voiceId: voiceId || '' }; // 예전 호출 방식
+  if (!tts) tts = defaultTTS(voiceId || ''); // 예전 호출 방식
   SCRIPT.meta.tts = tts;
   if (tts2 && tts2.voiceId) SCRIPT.meta.tts2 = tts2; else delete SCRIPT.meta.tts2;
   delete SCRIPT.meta.voiceId;
   loadScript(SCRIPT); // 목소리가 바뀌면 장면 키도 바뀐다
   AE.init();
-  const todo = TL.filter((e) => e.s.say && !VOICE[voiceKey(e.s)]);
-  const total = todo.length;
+  const all = TL.filter((e) => e.s.say && !VOICE[voiceKey(e.s)]);
+  // 경제음성(내 PC)은 모델 로딩이 길어서 장면을 모아 한 번에 만든다. 나머지 공급자는 장면마다 부른다.
+  const localTodo = all.filter((e) => voiceSpec(e.s).provider === 'local');
+  const todo = all.filter((e) => voiceSpec(e.s).provider !== 'local');
+  const total = all.length;
   let done = 0; const notes = [];
+  const keep = async (e, r) => {
+    const buffer = await AE.ctx.decodeAudioData(base64ToArrayBuffer(r.audio));
+    VOICE[voiceKey(e.s)] = { buffer, duration: buffer.duration, words: r.words || [], wav: r.audio };
+    voiceDB.put(voiceKey(e.s), { audio: r.audio, words: r.words || [] });
+    if (r.note) notes.push(r.note);
+    addCost(r.cost);
+    done++;
+    if (onProgress) onProgress(done, total);
+  };
+  const localRun = async () => {
+    if (!localTodo.length) return;
+    // 같은 목소리끼리 묶는다 (보통 하나)
+    const groups = {};
+    localTodo.forEach((e) => { const id = voiceSpec(e.s).voiceId || 'kkwabaegi'; (groups[id] = groups[id] || []).push(e); });
+    for (const [voiceId, list] of Object.entries(groups)) {
+      let poll = null;
+      if (onLocalProgress) poll = setInterval(async () => { try { onLocalProgress(await (await fetch('/api/tts-progress')).json()); } catch (err) {} }, 3000);
+      try {
+        const r = await api('/api/tts-batch', { voiceId, texts: list.map((e) => stripMarks(e.s.say)) });
+        for (let i = 0; i < list.length; i++) if (r.items[i]) await keep(list[i], r.items[i]);
+      } finally { if (poll) clearInterval(poll); }
+    }
+  };
   const worker = async () => {
     while (todo.length) {
       const e = todo.shift();
@@ -437,23 +474,26 @@ async function generateVoices({ tts, tts2 = null, voiceId, onProgress } = {}) {
         model: v.model || (v.provider === 'cartesia' ? s.cartesiaModel : '') || undefined,
         version: v.provider === 'cartesia' ? s.cartesiaVersion || undefined : undefined,
       });
-      const buffer = await AE.ctx.decodeAudioData(base64ToArrayBuffer(r.audio));
-      VOICE[voiceKey(e.s)] = { buffer, duration: buffer.duration, words: r.words || [], wav: r.audio };
-      voiceDB.put(voiceKey(e.s), { audio: r.audio, words: r.words || [] });
-      if (r.note) notes.push(r.note);
-      addCost(r.cost);
-      done++;
-      if (onProgress) onProgress(done, total);
+      await keep(e, r);
     }
   };
-  try { await Promise.all([worker(), worker()]); }
+  try { await Promise.all([localRun(), worker(), worker()]); }
   finally { loadScript(SCRIPT); }
   return { done, notes };
 }
 
+// 경제음성 진행률 표시: 문장 n/총, 걸린 시간, 남은 시간(대략)
+function localProgressText(p, show) {
+  if (!p || !p.running) return;
+  const min = (x) => `${Math.max(0, Math.round(x / 60000))}분`;
+  const spent = Date.now() - p.startedAt;
+  const eta = p.done > 0 ? ((spent - 120000) / p.done) * (p.total - p.done) : null;
+  show(`경제음성 ${p.done}/${p.total} 문장 · ${min(spent)} 지남${eta && eta > 0 ? ` · 약 ${min(eta)} 남음` : p.done ? '' : ' · 모델 불러오는 중(약 2분)'}`, p.total ? p.done / p.total : 0);
+}
+
 async function makeVoices() {
   const tts = currentTTS();
-  if (!ttsReady(tts.provider)) return status('voice-status', `${TTS_NAMES[tts.provider]} API 키를 ⚙ 설정이나 .env에 넣어 주세요.`, true);
+  if (!ttsReady(tts.provider)) return status('voice-status', tts.provider === 'local' ? '이 PC에서 경제음성(myvoice.cmd)을 찾지 못했습니다. .env 의 MYVOICE_CMD 경로를 확인하세요.' : `${TTS_NAMES[tts.provider]} API 키를 ⚙ 설정이나 .env에 넣어 주세요.`, true);
   if (!tts.voiceId && !(SERVER.tts && SERVER.tts[tts.provider] && SERVER.tts[tts.provider].voice)) return status('voice-status', '목소리를 고르거나 ID를 넣어 주세요.', true);
   $('btn-voice').disabled = true;
   const bar = $('voice-bar');
@@ -461,6 +501,7 @@ async function makeVoices() {
     const { done, notes } = await generateVoices({
       tts, tts2: currentTTS2(),
       onProgress: (d, t) => { bar.style.width = `${(d / t) * 100}%`; status('voice-status', `${d}/${t} 장면 음성 생성 중…`); },
+      onLocalProgress: (p) => localProgressText(p, (msg, frac) => { bar.style.width = `${frac * 100}%`; status('voice-status', msg); }),
     });
     store.set('script', SCRIPT);
     refreshLedger();
@@ -567,7 +608,7 @@ async function autopilot({ topic, tone, length = 'standard', aspect = '16:9', vo
   const { log } = await writeScript({ topic, card, length, aspect, source, lessons, channel, url, voiceId, fonts });
   await ensureScriptFonts([FONT_HEAD, FONT_BODY, FONT_CAPTION, FONT_NUM]);
   if (withVoice) {
-    const v = await generateVoices({ tts: tts || { provider: 'cartesia', voiceId }, tts2 });
+    const v = await generateVoices({ tts: tts || defaultTTS(voiceId), tts2 });
     log.push(`음성 ${v.done}개 장면` + (v.notes.length ? ` (${v.notes[0]})` : ''));
   }
   const qa = await runQA({ source: source + ' ' + topic });
@@ -651,7 +692,8 @@ async function makeAll() {
     const r = await writeScript({ ...inp, fonts: currentFonts(), onStep: (a) => typeof a === 'string' ? step(1, a) : a && step(1, '근거 없는 숫자나 형식 오류가 있어 한 번 더 쓰는 중…') });
     curT = firstLook(); store.set('script', SCRIPT); renderCost();
     if (ttsReady(tts.provider) && (tts.voiceId || (SERVER.tts && SERVER.tts[tts.provider] && SERVER.tts[tts.provider].voice))) {
-      await generateVoices({ tts, tts2, onProgress: (d, t) => { step(2, `내 목소리 ${d}/${t} 장면`); $('voice-bar').style.width = `${(d / t) * 100}%`; } });
+      await generateVoices({ tts, tts2, onProgress: (d, t) => { step(2, `내 목소리 ${d}/${t} 장면`); $('voice-bar').style.width = `${(d / t) * 100}%`; },
+        onLocalProgress: (p) => localProgressText(p, (msg, frac) => { step(2, msg); $('voice-bar').style.width = `${frac * 100}%`; }) });
       store.set('script', SCRIPT); renderCost();
     } else step(2, `${TTS_NAMES[tts.provider]} 키나 목소리가 없어 음성은 건너뜁니다`);
     step(3, '검수 중…');

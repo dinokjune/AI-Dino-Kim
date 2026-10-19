@@ -28,7 +28,7 @@ if (!args.topic && !args.topics) {
   node pipeline.mjs --topic "주제" [--tone stage] [--length shorts|standard|min10|min15|min30] [--aspect 16:9|9:16] [--voice <Cartesia 목소리 ID>]
                     [--source 참고자료.txt] [--channel "채널 이름"] [--url "채널 주소"] [--no-voice] [--upload]
                     [--llm claude-cli|codex|gemini|claude-api]   (대본 엔진: 생략하면 설치된 구독 CLI 우선, 없을 때만 API)
-                    [--tts cartesia|elevenlabs|openai|google|clova] [--voice <목소리 ID>] [--speed 1.0]
+                    [--tts local|cartesia|elevenlabs|openai|google|clova]   (local = 내 PC 경제음성 kkwabaegi, 생략하면 있으면 자동) [--voice <목소리 ID>] [--speed 1.0]
                     [--font-head "글꼴"] [--font-caption "글꼴"] [--font-body "글꼴"] [--font-number "글꼴"]
                     (글꼴: Google Fonts 이름, 설치된 글꼴 이름, 다운로드·fonts 폴더의 파일 이름)
   node pipeline.mjs --topics topics.txt [--count 1] ...   (파일에서 앞에서부터 count개를 처리)
@@ -85,7 +85,7 @@ for (const j of jobs) {
     (j.qa || []).filter((r) => r.level !== 'pass').forEach((r) => console.log(`    ${r.level === 'fail' ? '✗' : '!'} ${r.title}`));
     if (j.cost) {
       // 1,000자당 달러: CARTESIA_USD_PER_1K 등 <공급자>_USD_PER_1K 환경 변수, 없으면 공개 요금 기준 기본값
-      const DEF = { cartesia: 0.05, elevenlabs: 0.22, openai: 0.015, google: 0.016, clova: 0 };
+      const DEF = { local: 0, cartesia: 0.05, elevenlabs: 0.22, openai: 0.015, google: 0.016, clova: 0 };
       const c = j.cost, krw = Number(process.env.KRW_RATE || 1400);
       const by = c.tts.by && Object.keys(c.tts.by).length ? c.tts.by : { cartesia: c.tts.chars };
       const ttsUsd = Object.entries(by).reduce((a, [k, n]) => a + (n / 1000) * Number(process.env[`${k.toUpperCase()}_USD_PER_1K`] ?? DEF[k] ?? 0), 0);
