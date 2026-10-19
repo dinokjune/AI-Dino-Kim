@@ -86,8 +86,8 @@ async function importVoices(map) {
 }
 
 // 영상 전체를 24장으로 펼친 컨택트시트 (그래픽 객체를 돌려준다)
-function buildContactSheet(cols = 6, rows = 4) {
-  const tw = 320, th = 180, pad = 8;
+function buildContactSheet(cols = ASPECT === '9:16' ? 8 : 6, rows = ASPECT === '9:16' ? 3 : 4) {
+  const tw = ASPECT === '9:16' ? 180 : 320, th = ASPECT === '9:16' ? 320 : 180, pad = 8;
   const sheet = createGraphics(cols * (tw + pad) + pad, rows * (th + pad + 26) + pad);
   sheet.background('#1F2A30');
   sheet.textFont('Noto Sans KR'); sheet.textSize(16); sheet.fill(255);

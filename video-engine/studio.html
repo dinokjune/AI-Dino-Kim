@@ -65,6 +65,12 @@
   .preview { position: sticky; top: 76px; }
   .preview .frame { background: #000; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
   #stage canvas { width: 100% !important; height: auto !important; display: block; }
+  #stage.vertical { display: flex; justify-content: center; }
+  #stage.vertical canvas { width: auto !important; height: min(72vh, 760px) !important; max-width: 100%; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .seg button { background: var(--panel2); border: 0; padding: 9px 14px; cursor: pointer; color: inherit; font: inherit; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--accent); color: var(--accent-ink); }
   .controls { display: flex; gap: 8px; align-items: center; padding: 10px 0; flex-wrap: wrap; }
   #seek { flex: 1 1 200px; accent-color: var(--accent); }
   #time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; min-width: 104px; text-align: right; }
@@ -158,8 +164,15 @@
       <div id="recent-wrap" hidden><div class="hint" style="margin:10px 0 0">최근에 만든 주제</div><div class="chips" id="recent-topics"></div></div>
       <div class="row" style="margin-top:10px">
         <button class="b" id="btn-topics">✨ AI 주제 추천</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div class="seg" id="aspect" role="group" aria-label="화면 비율">
+          <button type="button" data-v="16:9" aria-pressed="true">16:9 가로</button>
+          <button type="button" data-v="9:16" aria-pressed="false">9:16 세로</button>
+        </div>
         <select id="length" class="fill" aria-label="영상 길이"></select>
       </div>
+      <div class="hint" id="length-note" style="margin:6px 0 0"></div>
       <details>
         <summary>참고 자료 · 채널 정보</summary>
         <label class="f" for="source">참고 자료 (원고, 기사, 메모 – 여기 있는 사실만 숫자로 씁니다)</label>

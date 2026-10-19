@@ -69,6 +69,7 @@ function defaultTransition(i, s) {
 
 function loadScript(obj) {
   SCRIPT = obj;
+  setAspect(META().aspect);
   setTone(META().tone || 'stage');
   applyFontOverride(META().fonts);
   if (typeof t3Reset === 'function' && window.THREE) t3Reset();
@@ -145,7 +146,52 @@ function drawBgFor(e, t) {
   drawStage(e.wall);
 }
 
+// 화면 비율 바꾸기: 캔버스 크기를 출력 크기에 맞춘다
+function setAspect(a) {
+  ASPECT = ASPECTS[a] ? a : '16:9';
+  const o = outSize();
+  if (typeof width !== 'undefined' && (width !== o.w || height !== o.h)) resizeCanvas(o.w, o.h);
+  const st = document.getElementById('stage');
+  if (st) st.classList.toggle('vertical', ASPECT === '9:16');
+}
+
 function renderAt(T) {
+  if (ASPECT === '9:16') return renderVertical(T);
+  renderScene(T, true);
+}
+
+// 9:16: 위 띠(제목) · 가운데 장면 · 아래 띠(자막).
+// 띠는 같은 장면 배경을 화면 높이에 맞춰 크게 깔고 어둡게 덮어, 어느 톤이든 흰 글자가 읽히게 한다.
+function renderVertical(T) {
+  const L = vLayout(), o = L.o;
+  const i = sceneAt(T), e = TL[i], t = T - e.start;
+  push(); translate(o.w / 2, o.h / 2); scale(o.h / H); translate(-W / 2, -H / 2);
+  drawBgFor(e, t);
+  pop();
+  noStroke(); fill(0, 0, 0, 150); rect(0, 0, o.w, o.h);
+  push(); translate(L.ox, L.top); scale(L.s);
+  clipRect(0, 0, W, H, 0, () => renderScene(T, false));
+  pop();
+  // 위: 영상 제목 (챕터가 있으면 지금 챕터 이름도)
+  const ch = currentChapter(e.i);
+  useFont(FONT_HEAD); textAlign(CENTER, CENTER); noStroke();
+  const title = stripMarks(META().title || META().topic || '');
+  if (ch) { fill(PAL.yellow); textSize(40); text(ch, o.w / 2, L.top - 300); }
+  fill('#FFFFFF'); textSize(title.length > 24 ? 62 : 74); textLeading((title.length > 24 ? 62 : 74) * 1.2);
+  text(title, o.w * 0.07, L.top - 270, o.w * 0.86, 240);
+  // 아래: 자막을 크게
+  drawCaption(e, t, { size: 66, maxW: o.w * 0.86, cx: o.w / 2, centerY: L.top + L.mh + (o.h - L.top - L.mh) * 0.42, noBars: true });
+}
+
+function currentChapter(sceneI) {
+  const chs = META().chapters;
+  if (!chs || !chs.length) return '';
+  let cur = '';
+  chs.forEach((c, n) => { if (sceneI >= c.scene) cur = `${n + 1}장 · ${c.title}`; });
+  return cur;
+}
+
+function renderScene(T, withCaption) {
   NOW = T;
   const i = sceneAt(T), e = TL[i], prev = TL[i - 1];
   const t = T - e.start;
@@ -210,7 +256,7 @@ function renderAt(T) {
   if (e.s.type === 'endcard' && e.s.closeCurtain !== false && TONE.engine.curtains) curtain = Math.max(curtain, inK(t, e.d - 1.4, 1.2));
   drawCurtains(curtain);
   drawGrainAndVignette();
-  drawCaption(e, t);
+  if (withCaption) drawCaption(e, t);
 }
 
 function blendMascot(a, b, k, walk) {
@@ -224,10 +270,10 @@ function blendMascot(a, b, k, walk) {
 }
 
 // ── 자막: 줄바꿈 계산 후 톤별 스타일로 그린다 ──
-function drawCaption(e, t) {
+function drawCaption(e, t, opt = {}) {
   const c = e.caps.find((c) => t >= c.a && t < c.b);
   if (!c) return;
-  const size = META().captionSize || 64, maxW = 1580;
+  const size = opt.size || META().captionSize || 64, maxW = opt.maxW || 1580;
   const font = TONE.engine.caption === 'mono' ? 'Nanum Gothic Coding' : capFont();
   textFont(font); textStyle(HEAD_BOLD.includes(font) ? BOLD : NORMAL); textSize(size);
   const toks = parseMarked(c.text), lines = [[]];
@@ -238,7 +284,7 @@ function drawCaption(e, t) {
     if (!lines[lines.length - 1].length && !tk.w.trim()) return;
     lines[lines.length - 1].push(tk); lw += w;
   });
-  drawCaptionStyled(lines, inK(t, c.a, 0.15), size);
+  drawCaptionStyled(lines, inK(t, c.a, 0.15), size, opt);
 }
 
 // ── 재생 제어 ──
@@ -339,7 +385,7 @@ function contactSheet() {
 
 // ── p5 ──
 function setup() {
-  const c = createCanvas(W, H);
+  const c = createCanvas(outSize().w, outSize().h);
   c.parent('stage');
   pixelDensity(1);
   frameRate(30);

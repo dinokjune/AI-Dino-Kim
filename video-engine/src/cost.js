@@ -85,10 +85,14 @@ function pendingTtsChars() {
 }
 
 // 대본 생성 전 예상치 (대략): 프롬프트 길이로 입력 토큰, 영상 길이로 출력 토큰(생각 토큰 포함)과 내레이션 글자 수를 짐작
-const LENGTH_GUESS = { shorts: { out: 3000, chars: 320 }, standard: { out: 8000, chars: 1000 }, long: { out: 15000, chars: 2100 } };
+// calls: 대본 AI 호출 수 (10분 이상은 목차 1번 + 챕터마다 1번, 챕터 프롬프트 길이는 단일 대본과 비슷하다고 본다)
+const LENGTH_GUESS = {
+  shorts: { out: 3000, chars: 300, calls: 1 }, standard: { out: 9000, chars: 850, calls: 1 },
+  min10: { out: 38000, chars: 3400, calls: 5 }, min15: { out: 56000, chars: 5100, calls: 7 }, min30: { out: 110000, chars: 10200, calls: 13 },
+};
 function estimateNew(length, promptText) {
-  const g = LENGTH_GUESS[length] || LENGTH_GUESS.standard;
-  const inTok = Math.round((promptText || '').length / 1.6);
+  const g = LENGTH_GUESS[typeof lengthKey === 'function' ? lengthKey(length) : length] || LENGTH_GUESS.standard;
+  const inTok = Math.round((promptText || '').length / 1.6) * g.calls;
   const p = { in: 4, out: 20 }; // claude-opus-5-5
   const claude = (inTok * p.in + g.out * p.out) / 1e6;
   const cs = costSettings();

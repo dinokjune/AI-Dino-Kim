@@ -190,14 +190,17 @@ function drawOrb(x, y) {
 
 // ── 자막 스타일 ──
 // lines: [[{w, hi}]], k: 등장 진행도(0~1)
-function drawCaptionStyled(lines, k, size) {
+// opt: cx(가운데 x), centerY(여러 줄 묶음의 가운데 y), noBars(시네마 검은 띠 생략) – 9:16 아래 띠에 그릴 때 쓴다
+function drawCaptionStyled(lines, k, size, opt = {}) {
   const style = TONE.engine.caption;
   const lh = size * 1.25;
   let baseY = H - 70 - (lines.length - 1) * lh;
-  if (style === 'cinema') {
+  if (style === 'cinema' && !opt.noBars) {
     noStroke(); fill(0); rect(0, 0, W, 90); rect(0, H - 150, W, 150);
     size *= 0.78; baseY = H - 75 - (lines.length - 1) * size * 1.25;
   }
+  if (opt.centerY) baseY = opt.centerY - ((lines.length - 1) * size * 1.25) / 2;
+  const CX = opt.cx ?? W / 2;
   const font = style === 'mono' ? 'Nanum Gothic Coding' : style === 'cinema' && !FONT_CAPTION ? FONT_BODY : capFont();
   textFont(font); textStyle(HEAD_BOLD.includes(font) ? BOLD : NORMAL); textSize(size);
   textAlign(LEFT, CENTER); strokeJoin(ROUND);
@@ -208,12 +211,12 @@ function drawCaptionStyled(lines, k, size) {
 
   if (style === 'pill') {
     const ph = lines.length * lhh + 40;
-    noStroke(); fill(0, 0, 0, 30); rect(W / 2 - maxW / 2 - 46, baseY - lhh / 2 - 14 + 6, maxW + 92, ph, ph / 2);
-    fill('#FFFFFF'); stroke('#DCE1EA'); strokeWeight(2); rect(W / 2 - maxW / 2 - 46, baseY - lhh / 2 - 20, maxW + 92, ph, Math.min(ph / 2, 40));
+    noStroke(); fill(0, 0, 0, 30); rect(CX - maxW / 2 - 46, baseY - lhh / 2 - 14 + 6, maxW + 92, ph, ph / 2);
+    fill('#FFFFFF'); stroke('#DCE1EA'); strokeWeight(2); rect(CX - maxW / 2 - 46, baseY - lhh / 2 - 20, maxW + 92, ph, Math.min(ph / 2, 40));
   }
   lines.forEach((ln, li) => {
     const tw = widths[li];
-    let x = W / 2 - tw / 2;
+    let x = CX - tw / 2;
     const y = baseY + li * lhh + (1 - k) * 12;
     if (style === 'block') {
       noStroke(); fill(TONE.engine.captionColor || '#111111');

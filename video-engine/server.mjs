@@ -248,7 +248,7 @@ async function handleJobs(req, res) {
   const created = topics.map((topic, i) => ({
     id: 'j' + (Date.now() + i).toString(36), kind: 'auto', title: topic, status: 'queued', createdAt: Date.now(), upload: !!body.upload,
     settings: keysFrom(req, body),
-    payload: { topic, tone: body.tone || 'stage', length: body.length || 'standard', voiceId: body.voiceId || process.env.CARTESIA_VOICE_ID || '', source: body.source || '', channel: body.channel || '', url: body.url || '', lessons: body.lessons || [], withVoice: body.withVoice !== false, fonts: body.fonts || null, tts: body.tts || null, tts2: body.tts2 || null },
+    payload: { topic, tone: body.tone || 'stage', length: body.length || 'standard', aspect: body.aspect === '9:16' ? '9:16' : '16:9', voiceId: body.voiceId || process.env.CARTESIA_VOICE_ID || '', source: body.source || '', channel: body.channel || '', url: body.url || '', lessons: body.lessons || [], withVoice: body.withVoice !== false, fonts: body.fonts || null, tts: body.tts || null, tts2: body.tts2 || null },
   }));
   JOBS.push(...created); runQueue(BASE_URL);
   send(res, 200, { jobs: created.map(publicJob) });

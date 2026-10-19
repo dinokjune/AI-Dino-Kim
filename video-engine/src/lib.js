@@ -1,5 +1,15 @@
 // 공용 상수·이징·그리기 헬퍼
 const W = 1920, H = 1080;
+// 출력 비율. 장면은 늘 1920×1080 좌표로 그리고, 9:16은 그 화면을 세로 프레임 가운데에 키워 넣는다
+const ASPECTS = { '16:9': { w: 1920, h: 1080 }, '9:16': { w: 1080, h: 1920 } };
+let ASPECT = '16:9';
+const outSize = () => ASPECTS[ASPECT] || ASPECTS['16:9'];
+// 9:16에서 가운데 장면의 배율·위치 (양옆을 조금 잘라 글자를 키운다: 1920폭 중 가운데 약 1740만 보임)
+function vLayout() {
+  const o = outSize(), s = 0.62, mh = H * s;
+  const top = Math.round((o.h - mh) * 0.4);
+  return { o, s, mh, top, ox: (o.w - W * s) / 2 };
+}
 const FLOOR_Y = H * 0.84;
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));

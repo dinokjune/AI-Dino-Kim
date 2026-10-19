@@ -211,9 +211,22 @@ function chooseTone(id) {
 }
 
 // ── 2. 주제 · 대본 ──
+function currentAspect() { return store.get('aspect', '16:9') === '9:16' ? '9:16' : '16:9'; }
+function renderAspect() {
+  document.querySelectorAll('#aspect button').forEach((b) => { const on = b.dataset.v === currentAspect(); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+}
+function renderLengthNote() {
+  const el = $('length-note'); if (!el) return;
+  const L = lengthOf($('length').value), v = currentAspect() === '9:16';
+  const notes = [];
+  if (L.chapters) notes.push(`목차를 먼저 짜고 ${L.chapters}개 챕터를 하나씩 씁니다. 대본 AI를 ${L.chapters + 1}번 부르고, 음성·MP4 렌더도 길이만큼 오래 걸립니다(30분 영상은 렌더만 수십 분 이상).`);
+  if (L.maxSec) notes.push(v ? '세로 + 1분 미만이면 유튜브에 쇼츠로 올라갑니다.' : '쇼츠로 올리려면 9:16 세로를 고르세요.');
+  else if (v) notes.push('세로 화면은 가운데에 장면, 위에 제목, 아래에 큰 자막이 들어갑니다.');
+  el.textContent = notes.join(' ');
+}
 function promptInputs() {
   return {
-    topic: $('topic').value.trim(), card: selectedCard(), length: $('length').value,
+    topic: $('topic').value.trim(), card: selectedCard(), length: $('length').value, aspect: currentAspect(),
     source: $('source').value.trim(), lessons: store.get('lessons', []),
     channel: $('channel').value.trim(), url: $('url').value.trim(),
   };
@@ -244,7 +257,7 @@ async function makeScript() {
   try {
     const r = await writeScript({
       ...inp, fonts: currentFonts(),
-      onStep: (n) => status('script-status', n ? '근거 없는 숫자나 형식 오류가 있어 한 번 더 쓰는 중…' : `"${inp.topic}" 대본을 쓰는 중… (톤: ${inp.card.name}, 보통 30초~2분)`),
+      onStep: (n) => status('script-status', typeof n === 'string' ? `${n} (챕터마다 1~3분)` : n ? '근거 없는 숫자나 형식 오류가 있어 한 번 더 쓰는 중…' : `"${inp.topic}" 대본을 쓰는 중… (톤: ${inp.card.name}, 보통 30초~2분)`),
     });
     curT = firstLook();
     store.set('script', SCRIPT);
@@ -460,20 +473,22 @@ async function makeVoices() {
 // 화면 없이 주제 하나를 끝까지 만든다: 대본 → 숫자 검문(실패 시 1회 재작성) → 음성 → 검수
 // 서버의 자동 제작 대기열이 헤드리스 브라우저에서 부른다.
 // 대본 작성: 형식 오류나 근거 없는 숫자가 나오면 이유를 알려 주고 한 번 다시 쓰게 한다
-async function writeScript({ topic, card, length = 'standard', source = '', lessons = [], channel = '', url = '', voiceId = '', fonts = null, onStep }) {
+async function writeScript({ topic, card, length = 'standard', aspect = '16:9', source = '', lessons = [], channel = '', url = '', voiceId = '', fonts = null, onStep }) {
+  length = lengthKey(length);
+  if (lengthOf(length).chapters) return writeLongScript({ topic, card, length, aspect, source, lessons, channel, url, voiceId, fonts, onStep });
   const log = [];
   const run = emptyCost();
   let issues = [], last = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     if (onStep) onStep(attempt);
     const extra = attempt ? ['지난 시도에서 문제가 있었다: ' + issues.join(' / ') + ' → 형식을 지키고, 화면 숫자는 say와 참고 자료에 있는 것만 쓴다'] : [];
-    const r = await api('/api/claude', { prompt: buildScriptPrompt({ topic, card, length, source, lessons: [...lessons, ...extra], channel, url }), maxTokens: 32000 }, topic);
+    const r = await api('/api/claude', { prompt: buildScriptPrompt({ topic, card, length, aspect, source, lessons: [...lessons, ...extra], channel, url }), maxTokens: 32000 }, topic);
     addCost(r.cost, run);
     let obj;
     try { obj = extractJSON(r.text); } catch (e) { issues = [e.message]; log.push(`대본 ${attempt + 1}차: JSON 오류`); continue; }
     const errs = validateScript(obj);
     if (errs.length) { issues = errs; log.push(`대본 ${attempt + 1}차: 형식 오류 ${errs.length}개`); continue; }
-    obj.meta = Object.assign({}, obj.meta, { tone: card.id, topic, source, voiceId, cost: run });
+    obj.meta = Object.assign({}, obj.meta, { tone: card.id, topic, source, voiceId, length, aspect, cost: run });
     if (fonts) obj.meta.fonts = fonts;
     if (channel) obj.meta.channel = channel;
     if (url) obj.meta.url = url;
@@ -488,12 +503,68 @@ async function writeScript({ topic, card, length = 'standard', source = '', less
   return { script: last, log, numberIssues: issues };
 }
 
+// 10분 이상: 목차를 먼저 짜고 챕터마다 따로 써서 이어 붙인다 (챕터마다 형식·숫자 검문, 실패하면 그 챕터만 한 번 다시)
+async function writeLongScript({ topic, card, length, aspect, source, lessons, channel, url, voiceId, fonts, onStep }) {
+  const log = [], run = emptyCost(), L = lengthOf(length);
+  const say = (msg) => onStep && onStep(msg);
+  say(`목차 짜는 중… (${L.label})`);
+  let outline = null;
+  for (let attempt = 0; attempt < 2 && !outline; attempt++) {
+    const r = await api('/api/claude', { prompt: buildOutlinePrompt({ topic, card, length, source, aspect }), maxTokens: 8000 }, topic);
+    addCost(r.cost, run);
+    try {
+      const o = extractJSON(r.text);
+      if (Array.isArray(o.chapters) && o.chapters.length >= 2) outline = { title: o.title || topic, chapters: o.chapters.slice(0, L.chapters) };
+    } catch (e) { /* 한 번 더 */ }
+  }
+  if (!outline) throw new Error('목차를 만들지 못했습니다' + ` (이미 쓴 비용 ${fmtUsd(run.claude.usd)})`);
+  log.push(`목차 ${outline.chapters.length}장`);
+  const meta = { title: outline.title, tone: card.id, topic, source, voiceId, length, aspect, chapters: [], cost: run };
+  if (fonts) meta.fonts = fonts;
+  if (channel) meta.channel = channel;
+  if (url) meta.url = url;
+  const scenes = [];
+  let prevSay = '', leftIssues = [];
+  for (let i = 0; i < outline.chapters.length; i++) {
+    let issues = [], got = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      say(`${i + 1}/${outline.chapters.length}장 "${outline.chapters[i].title}" 쓰는 중…${attempt ? ' (다시)' : ''}`);
+      const extra = attempt ? ['지난 시도에서 문제가 있었다: ' + issues.join(' / ') + ' → 형식을 지키고, 화면 숫자는 say와 참고 자료에 있는 것만 쓴다'] : [];
+      const r = await api('/api/claude', { prompt: buildChapterPrompt({ topic, card, outline, index: i, prevSay, source, lessons: [...lessons, ...extra], channel, url, aspect, length }), maxTokens: 32000 }, topic);
+      addCost(r.cost, run);
+      let obj;
+      try { obj = extractJSON(r.text); } catch (e) { issues = [e.message]; continue; }
+      if (Array.isArray(obj)) obj = { scenes: obj };
+      const errs = validateScript(obj);
+      if (errs.length) { issues = errs; continue; }
+      // 마지막 장이 아니면 끝인사 장면은 뺀다
+      if (i < outline.chapters.length - 1) obj.scenes = obj.scenes.filter((sc) => sc.type !== 'endcard');
+      loadScript({ meta: { ...meta, cost: emptyCost() }, scenes: obj.scenes });
+      got = obj.scenes;
+      issues = numberIssues(source);
+      if (!issues.length) break;
+    }
+    if (!got) throw new Error(`${i + 1}장을 만들지 못했습니다: ${issues.slice(0, 2).join(' / ')} (이미 쓴 비용 ${fmtUsd(run.claude.usd)})`);
+    got.forEach((sc) => { if (!sc.beat) sc.beat = outline.chapters[i].title; });
+    meta.chapters.push({ title: outline.chapters[i].title, scene: scenes.length });
+    scenes.push(...got);
+    leftIssues = leftIssues.concat(issues);
+    prevSay = stripMarks(got[got.length - 1].say || '');
+    log.push(`${i + 1}장 ${got.length}장면${issues.length ? ` (숫자 ${issues.length})` : ''}`);
+  }
+  const obj = { meta, scenes };
+  loadScript(obj);
+  rememberTopic(topic);
+  log.push(`합계 ${TL.length}장면 · 약 ${Math.round(TOTAL / 60)}분`);
+  return { script: obj, log, numberIssues: leftIssues };
+}
+
 // 화면 없이 주제 하나를 끝까지 만든다: 대본(재작성 포함) → 음성 → 검수
 // 서버의 자동 제작 대기열이 헤드리스 브라우저에서 부른다.
-async function autopilot({ topic, tone, length = 'standard', voiceId = '', tts = null, tts2 = null, source = '', channel = '', url = '', lessons = [], withVoice = true, fonts = null }) {
+async function autopilot({ topic, tone, length = 'standard', aspect = '16:9', voiceId = '', tts = null, tts2 = null, source = '', channel = '', url = '', lessons = [], withVoice = true, fonts = null }) {
   if (fonts) { await loadUserFonts(); await Promise.all(Object.values(fonts).map(ensureGoogleFont)); }
   const card = TONE_CARDS.find((c) => c.id === tone) || TONE_CARDS[0];
-  const { log } = await writeScript({ topic, card, length, source, lessons, channel, url, voiceId, fonts });
+  const { log } = await writeScript({ topic, card, length, aspect, source, lessons, channel, url, voiceId, fonts });
   await ensureScriptFonts([FONT_HEAD, FONT_BODY, FONT_CAPTION, FONT_NUM]);
   if (withVoice) {
     const v = await generateVoices({ tts: tts || { provider: 'cartesia', voiceId }, tts2 });
@@ -577,7 +648,7 @@ async function makeAll() {
   const step = (n, msg) => status('all-status', `[${n}/4] ${msg}`);
   try {
     step(1, `"${inp.topic}" 대본을 쓰는 중… (${inp.card.name} 톤)`);
-    const r = await writeScript({ ...inp, fonts: currentFonts(), onStep: (a) => a && step(1, '근거 없는 숫자나 형식 오류가 있어 한 번 더 쓰는 중…') });
+    const r = await writeScript({ ...inp, fonts: currentFonts(), onStep: (a) => typeof a === 'string' ? step(1, a) : a && step(1, '근거 없는 숫자나 형식 오류가 있어 한 번 더 쓰는 중…') });
     curT = firstLook(); store.set('script', SCRIPT); renderCost();
     if (ttsReady(tts.provider) && (tts.voiceId || (SERVER.tts && SERVER.tts[tts.provider] && SERVER.tts[tts.provider].voice))) {
       await generateVoices({ tts, tts2, onProgress: (d, t) => { step(2, `내 목소리 ${d}/${t} 장면`); $('voice-bar').style.width = `${(d / t) * 100}%`; } });
@@ -673,7 +744,7 @@ async function queueTopics() {
   $('btn-queue').disabled = true;
   try {
     const r = await api('/api/jobs', jobBody({
-      topics, tone: selectedCard().id, length: $('length').value, tts: currentTTS(), tts2: currentTTS2(),
+      topics, tone: selectedCard().id, length: $('length').value, aspect: currentAspect(), tts: currentTTS(), tts2: currentTTS2(),
       source: $('source').value.trim(), channel: $('channel').value.trim(), url: $('url').value.trim(),
       lessons: store.get('lessons', []), withVoice: $('queue-voice').checked, upload: $('queue-upload').checked, fonts: currentFonts(),
     }));
@@ -727,8 +798,18 @@ const UI = {
   init() {
     // 길이 선택
     Object.entries(LENGTHS).forEach(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v.label; $('length').appendChild(o); });
-    $('length').value = store.get('length', 'standard');
-    $('length').onchange = () => store.set('length', $('length').value);
+    $('length').value = lengthKey(store.get('length', 'standard'));
+    $('length').onchange = () => { store.set('length', $('length').value); renderLengthNote(); updateEstimate(); };
+    renderLengthNote();
+    // 화면 비율: 고르면 지금 대본에도 바로 적용 (장면·음성은 그대로, 화면 배치만 바뀜)
+    document.querySelectorAll('#aspect button').forEach((b) => {
+      b.onclick = () => {
+        store.set('aspect', b.dataset.v); renderAspect();
+        if (SCRIPT && META().aspect !== b.dataset.v) { const s = JSON.parse(JSON.stringify(SCRIPT)); s.meta.aspect = b.dataset.v; applyScript(s, { keepTime: true }); }
+        renderLengthNote();
+      };
+    });
+    renderAspect();
     ['channel', 'url', 'source', 'topic'].forEach((id) => {
       $(id).value = store.get('f.' + id, id === 'channel' ? (META().channel || '') : '');
       $(id).addEventListener('change', () => store.set('f.' + id, $(id).value));

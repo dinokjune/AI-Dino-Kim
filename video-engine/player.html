@@ -20,6 +20,8 @@
   .chk { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14px; }
   #wrap { padding: 0 16px; }
   #stage canvas { width: 100% !important; height: auto !important; display: block; border-radius: 10px; background: #000; }
+  #stage.vertical { display: flex; justify-content: center; }
+  #stage.vertical canvas { width: auto !important; height: min(80vh, 900px) !important; max-width: 100%; }
   #bar { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
   #seek { flex: 1; accent-color: var(--accent); }
   #time { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 120px; text-align: right; }

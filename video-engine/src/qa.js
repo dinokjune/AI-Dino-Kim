@@ -43,14 +43,22 @@ function numberIssues(source = '') {
 // 밝기·움직임 양은 64×36(톤 목표값을 잰 기준), 정지 화면 판정은 더 촘촘한 192×108로 본다
 const QA_CANVAS = (() => { const c = document.createElement('canvas'); c.width = 64; c.height = 36; return c; })();
 const QA_FINE = (() => { const c = document.createElement('canvas'); c.width = 192; c.height = 108; return c; })();
+// 9:16은 제목·자막 띠를 빼고 가운데 장면만 잰다 (톤 목표값이 가로 화면 기준이라서)
+function qaSrc() {
+  const cv = drawingContext.canvas;
+  if (ASPECT !== '9:16') return [0, 0, cv.width, cv.height];
+  const L = vLayout();
+  return [0, L.top, L.o.w, L.mh];
+}
 function sampleFrame(T, fine = false) {
   renderAt(T);
   const g = QA_CANVAS.getContext('2d', { willReadFrequently: true });
-  g.drawImage(drawingContext.canvas, 0, 0, 64, 36);
+  const src = qaSrc();
+  g.drawImage(drawingContext.canvas, ...src, 0, 0, 64, 36);
   const small = g.getImageData(0, 0, 64, 36).data;
   if (!fine) return small;
   const h = QA_FINE.getContext('2d', { willReadFrequently: true });
-  h.drawImage(drawingContext.canvas, 0, 0, 192, 108);
+  h.drawImage(drawingContext.canvas, ...src, 0, 0, 192, 108);
   return { small, fine: h.getImageData(0, 0, 192, 108).data };
 }
 function lumaOf(px) {
@@ -88,6 +96,13 @@ async function runQA({ source = '' } = {}) {
   if (ratio < 0.7) R('warn', '장면 속도: 너무 급함', `평균 ${avg.toFixed(1)}초 (목표 ${tg.cutSec}초의 ${(ratio * 100).toFixed(0)}%). 대사를 조금 늘리거나 장면을 합치세요.`);
   else if (ratio > 1.3) R('warn', '장면 속도: 너무 느림', `평균 ${avg.toFixed(1)}초 (목표 ${tg.cutSec}초의 ${(ratio * 100).toFixed(0)}%). 긴 장면을 둘로 나누세요.`);
   else R('pass', '장면 속도', `평균 ${avg.toFixed(1)}초 / 목표 ${tg.cutSec}초 (±30% 안)`);
+
+  // 2-1) 전체 길이: 고른 길이의 목표와 비교 (쇼츠는 60초를 넘으면 안 된다)
+  const LEN = META().length && typeof lengthOf === 'function' ? lengthOf(META().length) : null;
+  const mmss = (x) => `${Math.floor(x / 60)}분 ${Math.round(x % 60)}초`;
+  if (LEN && LEN.maxSec && TOTAL > LEN.maxSec) R('fail', '길이: 쇼츠 초과', `${mmss(TOTAL)} – 쇼츠는 60초 미만이어야 합니다. 장면을 줄이거나 say를 짧게 하세요.`);
+  else if (LEN && (TOTAL < LEN.targetSec * 0.7 || TOTAL > LEN.targetSec * 1.35)) R('warn', '길이: 목표와 차이', `${mmss(TOTAL)} / 목표 약 ${mmss(LEN.targetSec)}${!TL.some((e) => e.voice) ? ' (음성을 넣으면 길이가 바뀝니다)' : ''}`);
+  else if (LEN) R('pass', '전체 길이', `${mmss(TOTAL)} / 목표 약 ${mmss(LEN.targetSec)}`);
 
   // 3) 밝기 + 4) 움직임·정지 화면: 0.5초 간격으로 재기
   const step = 0.5, lumas = [], diffs = [];
