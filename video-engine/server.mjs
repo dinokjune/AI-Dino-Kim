@@ -273,7 +273,7 @@ const server = http.createServer(async (req, res) => {
     if (!allowed(req)) return send(res, 403, { error: '허용되지 않은 요청입니다' });
     if (req.method === 'GET' && req.url === '/api/status') {
       return send(res, 200, {
-        server: true, claudeModel: CLAUDE_MODEL, cartesiaModel: CARTESIA_MODEL, cartesiaVersion: CARTESIA_VERSION,
+        server: true, root: ROOT, cliFirst: true, claudeModel: CLAUDE_MODEL, cartesiaModel: CARTESIA_MODEL, cartesiaVersion: CARTESIA_VERSION,
         claudeKey: !!process.env.ANTHROPIC_API_KEY, cartesiaKey: !!process.env.CARTESIA_API_KEY, voiceId: !!process.env.CARTESIA_VOICE_ID,
         tts: providerStatus(),
         llm: engineStatus(),
@@ -316,5 +316,15 @@ export function startServer({ port = PORT, host = HOST } = {}) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  startServer().then(({ port }) => console.log(`영상 스튜디오: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${port}`));
+  startServer().then(({ port }) => console.log(`영상 스튜디오: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${port}  (폴더: ${ROOT})`)).catch((e) => {
+    // 예전에 켠 서버가 남아 있으면 새 서버가 뜨지 못하고, 브라우저는 옛 서버(옛 코드)를 보게 된다
+    if (e.code === 'EADDRINUSE') {
+      console.error(`포트 ${PORT}를 이미 다른 프로그램(예전에 켠 스튜디오 서버일 수 있음)이 쓰고 있어 시작하지 못했습니다.`);
+      console.error(process.platform === 'win32'
+        ? `  끄기: Get-NetTCPConnection -LocalPort ${PORT} -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess }`
+        : `  끄기: kill $(lsof -t -i :${PORT})`);
+      console.error(`  또는 다른 포트로: PORT=8788 (.env 에 적거나 환경 변수로)`);
+    } else console.error(e);
+    process.exit(1);
+  });
 }
