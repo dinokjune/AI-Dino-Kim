@@ -29,7 +29,8 @@ export const groupIntoLines = (
 
   for (const word of words) {
     const prev = current[current.length - 1];
-    const chars = current.reduce((n, w) => n + w.text.length, 0) + word.text.length;
+    const chars =
+      current.reduce((n, w) => n + w.text.length, 0) + word.text.length;
     if (
       prev &&
       (current.length >= opts.maxWords ||
