@@ -1,0 +1,25 @@
+{
+  "name": "@workspace/hologram-video",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render:captions": "remotion render src/index.ts WordCaptions out/captions.mp4",
+    "still:captions": "remotion still src/index.ts WordCaptions out/captions.png --frame=45",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@remotion/bundler": "^4.0.538",
+    "@remotion/cli": "^4.0.538",
+    "@remotion/renderer": "^4.0.538",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "remotion": "^4.0.538"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:"
+  }
+}
