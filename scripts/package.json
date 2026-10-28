@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "hello": "tsx ./src/hello.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "hologram": "tsx ./src/hologram/cli.ts"
   },
   "devDependencies": {
     "@types/node": "catalog:",

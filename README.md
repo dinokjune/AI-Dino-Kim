@@ -57,6 +57,7 @@ AI-Dino-Kim/
 │           └── pages/      # 페이지 컴포넌트
 ├── lib/                   # 공유 라이브러리
 ├── scripts/               # 빌드/유틸 스크립트
+│   └── src/hologram/      # 홀로그램 4면 영상 변환기
 └── package.json           # 루트 워크스페이스 설정
 ```
 
@@ -99,6 +100,14 @@ pnpm run build
 # 타입체크만 실행
 pnpm run typecheck
 ```
+
+### 홀로그램 4면 영상 만들기
+
+```bash
+pnpm --filter @workspace/scripts run hologram -- 입력.mp4 -o 출력.mp4
+```
+
+ffmpeg가 필요합니다. 옵션과 팁은 [scripts/src/hologram/README.md](scripts/src/hologram/README.md)를 보세요.
 
 ---
 
