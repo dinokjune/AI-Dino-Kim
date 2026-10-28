@@ -1,6 +1,6 @@
 import React from "react";
 import { Easing, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { COLORS, FONT_FAMILY, SAFE } from "../theme";
+import { COLORS, HAND_FONT_FAMILY, SAFE } from "../theme";
 import { Stage } from "./Stage";
 
 export type RoleLabelProps = {
@@ -51,10 +51,8 @@ export const RoleLabel: React.FC<RoleLabelProps> = ({
       >
         <div
           style={{
-            fontFamily: `'Nanum Pen Script', 'Gaegu', 'Segoe Script', ${FONT_FAMILY}`,
-            fontStyle: "italic",
-            fontWeight: 700,
-            fontSize: 120,
+            fontFamily: HAND_FONT_FAMILY,
+            fontSize: 150,
             color: COLORS.sky,
             lineHeight: 1,
           }}

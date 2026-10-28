@@ -20,5 +20,8 @@ export const COLORS = {
   ink: "#05070d",
 } as const;
 
+// 폰트 파일은 public/fonts 에 있고 src/fonts.ts 가 등록한다. 뒤쪽은 로딩 실패 시 대비용.
 export const FONT_FAMILY =
   "Pretendard, 'Noto Sans KR', 'Noto Sans CJK KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+
+export const HAND_FONT_FAMILY = `'Nanum Pen Script', ${FONT_FAMILY}`;

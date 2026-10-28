@@ -40,7 +40,18 @@ pnpm --filter @workspace/hologram-video run render:captions # mp4 렌더
 
 - 규격·색·안전 영역은 `src/theme.ts` 한 곳에서만 바꾼다. 하단 440px는 릴스 UI가 덮으므로 비워 둔다.
 - 컴포지션은 효과마다 따로 등록한다(`src/Root.tsx`).
-- 한글 폰트: 렌더 머신에 Pretendard 또는 Noto Sans KR이 설치돼 있어야 한다.
+- 폰트는 저장소에 포함돼 있어 렌더 머신에 따로 설치할 필요가 없다(아래 참고).
+
+## 폰트
+
+`public/fonts`의 파일을 `src/fonts.ts`가 `FontFace`로 등록하고, 로딩이 끝날 때까지 렌더를 멈춘다(`delayRender`).
+
+| 파일 | 용도 | 라이선스 |
+|---|---|---|
+| `PretendardVariable.woff2` | 본문·자막·로고 (가변 굵기 45–920) | SIL OFL 1.1 (`Pretendard-LICENSE.txt`) |
+| `NanumPenScript-Regular.ttf` | 손글씨 라벨 | SIL OFL 1.1 (`NanumPenScript-OFL.txt`) |
+
+폰트를 바꾸려면 파일을 `public/fonts`에 넣고 `src/fonts.ts`의 `FONTS`와 `src/theme.ts`의 폰트 이름을 함께 고친다.
 
 ## 오프라인/클라우드 환경에서 렌더하기
 

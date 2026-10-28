@@ -1,11 +1,14 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Easing,
+  continueRender,
+  delayRender,
   interpolate,
   random,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import { fontsReady } from "../fonts";
 import { COLORS, FONT_FAMILY, VIDEO } from "../theme";
 import { Stage } from "./Stage";
 
@@ -70,8 +73,25 @@ export const ParticleLogo: React.FC<ParticleLogoProps> = ({
   const { fps } = useVideoConfig();
   const t = frame / fps;
 
-  const size = useMemo(() => fitFontSize(text, fontSize), [text, fontSize]);
-  const targets = useMemo(() => sampleText(text, size, 8), [text, size]);
+  // 캔버스로 글자 모양을 뽑기 전에 폰트가 로드돼 있어야 입자 목표와 완성 글자가 일치한다.
+  const [layout, setLayout] = useState<{ size: number; targets: Pt[] } | null>(
+    null,
+  );
+  const [handle] = useState(() => delayRender("입자 로고 목표점 계산"));
+  useEffect(() => {
+    let cancelled = false;
+    fontsReady.then(() => {
+      if (cancelled) return;
+      const size = fitFontSize(text, fontSize);
+      setLayout({ size, targets: sampleText(text, size, 8) });
+      continueRender(handle);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [text, fontSize, handle]);
+  const size = layout?.size ?? fontSize;
+  const targets = layout?.targets ?? [];
   const p = interpolate(t, [from, to], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
