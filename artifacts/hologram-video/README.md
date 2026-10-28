@@ -13,6 +13,9 @@ AI 영상 모델은 캐릭터 클립만 만들고, 화면에서 글자로 읽히
 | `RoleLabel` | 손글씨 역할 라벨 + 왼쪽→오른쪽으로 그려지는 밑줄 | 완료 |
 | `ChipsBurst` | 알약 칩 팝인 + 아래→위로 올라가는 입자 (얼굴 영역 회피) | 완료 |
 | `ParticleLogo` | 소용돌이치며 모여 로고가 되는 입자 피날레 | 완료 |
+| `CodeHoloPanel` | 오른쪽 위 홀로그램 창에 코드가 타이핑되고 상태창(✓ build passing)이 뜸 | 완료 |
+| `SiteHoloCards` | 사이트 스크롤 녹화를 홀로그램 카드로 띄우고 `switchAt` 시각마다 스와이프 | 완료 |
+| `MetricCards` | 지표 카드가 포물선으로 날아와 꽂히고 물결 라인 차트가 흐름 | 완료 |
 
 ## 사용법
 
@@ -36,6 +39,21 @@ pnpm --filter @workspace/hologram-video run render:captions # mp4 렌더
      --props='{"videoSrc":"my.mp4","words":'"$(cat src/data/words.json)"'}'
    ```
 
+### 내 사이트를 홀로그램 카드로 띄우기
+
+1. 사이트를 스크롤하며 녹화한다. 결과는 `public/sites/<도메인>.mp4`로 저장된다(커밋하지 않음).
+   ```bash
+   node scripts/capture-sites.mjs https://ailab.dinokim.com https://my.portfolio --seconds 6
+   ```
+   브라우저가 없다는 오류가 나면 `npx playwright install chromium`을 한 번 실행한다.
+2. `switchAt`에 손으로 넘기는 시각(초)을 넣어 렌더한다.
+   ```bash
+   npx remotion render src/index.ts SiteHoloCards out/sites.mp4 --props='{
+     "sites":[{"name":"AI 활용연구소","src":"sites/ailab.dinokim.com.mp4"},
+              {"name":"포트폴리오","src":"sites/my.portfolio.mp4"}],
+     "switchAt":[0.3, 2.1]}'
+   ```
+
 ## 규칙
 
 - 규격·색·안전 영역은 `src/theme.ts` 한 곳에서만 바꾼다. 하단 440px는 릴스 UI가 덮으므로 비워 둔다.
@@ -50,6 +68,7 @@ pnpm --filter @workspace/hologram-video run render:captions # mp4 렌더
 |---|---|---|
 | `PretendardVariable.woff2` | 본문·자막·로고 (가변 굵기 45–920) | SIL OFL 1.1 (`Pretendard-LICENSE.txt`) |
 | `NanumPenScript-Regular.ttf` | 손글씨 라벨 | SIL OFL 1.1 (`NanumPenScript-OFL.txt`) |
+| `JetBrainsMono.ttf` | 코드 패널 (가변 굵기 100–800) | SIL OFL 1.1 (`JetBrainsMono-OFL.txt`) |
 
 폰트를 바꾸려면 파일을 `public/fonts`에 넣고 `src/fonts.ts`의 `FONTS`와 `src/theme.ts`의 폰트 이름을 함께 고친다.
 

@@ -6,9 +6,12 @@ import {
 } from "./components/WordCaptions";
 import sampleWords from "./data/sample.words.json";
 import { ChipsBurst } from "./components/ChipsBurst";
+import { CodeHoloPanel, codeHoloDefaults } from "./components/CodeHoloPanel";
+import { MetricCards, metricDefaults } from "./components/MetricCards";
 import { NeonSign, neonDefaults } from "./components/NeonSign";
 import { ParticleLogo } from "./components/ParticleLogo";
 import { RoleLabel } from "./components/RoleLabel";
+import { SiteHoloCards, siteHoloDefaults } from "./components/SiteHoloCards";
 import { COLORS, VIDEO } from "./theme";
 import type { Word } from "./types";
 
@@ -80,6 +83,27 @@ export const RemotionRoot: React.FC = () => {
         component={ParticleLogo}
         durationInFrames={VIDEO.fps * 5}
         defaultProps={{ text: "MOONGI STUDIO" }}
+        {...common}
+      />
+      <Composition
+        id="CodeHoloPanel"
+        component={CodeHoloPanel}
+        durationInFrames={VIDEO.fps * 6}
+        defaultProps={codeHoloDefaults}
+        {...common}
+      />
+      <Composition
+        id="SiteHoloCards"
+        component={SiteHoloCards}
+        durationInFrames={VIDEO.fps * 5}
+        defaultProps={siteHoloDefaults}
+        {...common}
+      />
+      <Composition
+        id="MetricCards"
+        component={MetricCards}
+        durationInFrames={VIDEO.fps * 4}
+        defaultProps={metricDefaults}
         {...common}
       />
     </>

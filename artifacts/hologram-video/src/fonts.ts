@@ -12,6 +12,11 @@ const FONTS = [
     file: "fonts/NanumPenScript-Regular.ttf",
     weight: "400",
   },
+  {
+    family: "JetBrains Mono",
+    file: "fonts/JetBrainsMono.ttf",
+    weight: "100 800",
+  },
 ] as const;
 
 const load = async () => {

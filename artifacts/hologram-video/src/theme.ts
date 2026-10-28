@@ -25,3 +25,5 @@ export const FONT_FAMILY =
   "Pretendard, 'Noto Sans KR', 'Noto Sans CJK KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
 
 export const HAND_FONT_FAMILY = `'Nanum Pen Script', ${FONT_FAMILY}`;
+
+export const MONO_FONT_FAMILY = `'JetBrains Mono', ${FONT_FAMILY}`;
