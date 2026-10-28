@@ -25,7 +25,7 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 if (!args.topic && !args.topics) {
   console.log(`사용법:
-  node pipeline.mjs --topic "주제" [--tone stage] [--length shorts|standard|min10|min15|min30] [--aspect 16:9|9:16] [--voice <Cartesia 목소리 ID>]
+  node pipeline.mjs --topic "주제" [--tone cinema] [--length shorts|standard|min10|min15|min30] [--aspect 16:9|9:16] [--voice <Cartesia 목소리 ID>]
                     [--source 참고자료.txt] [--channel "채널 이름"] [--url "채널 주소"] [--no-voice] [--upload]
                     [--llm claude-cli|codex|gemini|claude-api]   (대본 엔진: 생략하면 설치된 구독 CLI 우선, 없을 때만 API)
                     [--tts local|cartesia|elevenlabs|openai|google|clova]   (local = 내 PC 경제음성 kkwabaegi, 생략하면 있으면 자동) [--voice <목소리 ID>] [--speed 1.0]
@@ -56,7 +56,7 @@ for (const topic of topics) {
     id: 'cli' + Date.now().toString(36) + jobs.length, kind: 'auto', title: topic, status: 'queued', createdAt: Date.now(), upload: !!args.upload,
     settings: { llmEngine: args.llm ? String(args.llm) : '' },
     payload: {
-      topic, tone: args.tone || 'stage', length: args.length || 'standard', aspect: args.aspect === '9:16' ? '9:16' : '16:9', voiceId: args.voice || process.env.CARTESIA_VOICE_ID || '',
+      topic, tone: args.tone || 'cinema', length: args.length || 'standard', aspect: args.aspect === '9:16' ? '9:16' : '16:9', voiceId: args.voice || process.env.CARTESIA_VOICE_ID || '',
       source: args.source ? fs.readFileSync(String(args.source), 'utf8') : '', channel: args.channel || '', url: args.url || '',
       lessons, withVoice: !args['no-voice'],
       fonts: ['font-head', 'font-caption', 'font-body', 'font-number'].some((k) => args[k])

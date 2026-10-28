@@ -169,7 +169,9 @@ async function addFontFiles(files) {
 }
 
 // ── 1. 톤 카드 ──
-function selectedCard() { return TONE_CARDS.find((c) => c.id === store.get('tone', 'stage')) || TONE_CARDS[0]; }
+// 기본 톤: 시네마틱 3D (사용자가 고른 템플릿)
+const DEFAULT_TONE = 'cinema';
+function selectedCard() { return TONE_CARDS.find((c) => c.id === store.get('tone', DEFAULT_TONE)) || TONE_CARDS[0]; }
 
 function renderTones() {
   const cur = selectedCard();
@@ -242,7 +244,7 @@ function applyScript(obj, { keepTime = false } = {}) {
   const errs = validateScript(obj);
   if (errs.length) throw new Error(errs.slice(0, 6).join('\n'));
   obj.meta = obj.meta || {};
-  obj.meta.tone = obj.meta.tone || store.get('tone', 'stage');
+  obj.meta.tone = obj.meta.tone || store.get('tone', DEFAULT_TONE);
   const ch = $('channel').value.trim(), url = $('url').value.trim();
   if (ch) obj.meta.channel = ch;
   if (url) obj.meta.url = url;
@@ -859,11 +861,24 @@ const UI = {
     // 저장된 대본·톤 복원
     const saved = store.get('script', null);
     if (saved) { try { loadScript(saved); } catch (e) {} }
-    const tone = store.get('tone', META().tone || 'stage');
+    // 시네마 톤을 기본으로 바꾼 뒤 처음 열 때 한 번만 시네마로 맞춘다 (그 뒤 고른 톤은 그대로)
+    if (!store.get('cinemaDefaultApplied', false)) { store.set('cinemaDefaultApplied', true); store.set('tone', DEFAULT_TONE); }
+    const tone = store.get('tone', DEFAULT_TONE);
     store.set('tone', tone);
     if (META().tone !== tone) { const s = JSON.parse(JSON.stringify(SCRIPT)); s.meta.tone = tone; loadScript(s); }
     renderTones();
     renderLessons();
+    // ?load=examples/파일.json 으로 견본 대본을 바로 연다 (예: 실질임금 시네마 9:16)
+    const want = new URLSearchParams(location.search).get('load');
+    if (want && /^examples\/[\w.-]+\.json$/.test(want)) {
+      fetch(want).then((r) => r.json()).then((d) => {
+        if (d.meta && d.meta.aspect) { store.set('aspect', d.meta.aspect); renderAspect(); }
+        if (d.meta && d.meta.tone) { store.set('tone', d.meta.tone); }
+        applyScript(d); renderTones(); curT = firstLook();
+        if (d.meta && d.meta.source) $('source').value = d.meta.source;
+        status('script-status', `견본을 불러왔습니다: ${d.meta.title || want} (장면 ${TL.length}개)`);
+      }).catch((e) => status('script-status', '견본 불러오기 실패: ' + e.message, true));
+    }
     FONT_ROLES.forEach((r) => { $('font-' + r).onchange = chooseFonts; });
     $('font-search').oninput = renderFontSelects;
     $('font-ko-only').onchange = renderFontSelects;
