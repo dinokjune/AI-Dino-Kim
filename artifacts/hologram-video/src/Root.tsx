@@ -12,6 +12,10 @@ import { NeonSign, neonDefaults } from "./components/NeonSign";
 import { ParticleLogo } from "./components/ParticleLogo";
 import { RoleLabel } from "./components/RoleLabel";
 import { SiteHoloCards, siteHoloDefaults } from "./components/SiteHoloCards";
+import { Reel } from "./components/Reel";
+import { TextBehind } from "./components/TextBehind";
+import sampleScene from "./data/sample.scene.json";
+import { type Scene, sceneDuration } from "./scene";
 import { COLORS, VIDEO } from "./theme";
 import type { Word } from "./types";
 
@@ -104,6 +108,24 @@ export const RemotionRoot: React.FC = () => {
         component={MetricCards}
         durationInFrames={VIDEO.fps * 4}
         defaultProps={metricDefaults}
+        {...common}
+      />
+      <Composition
+        id="TextBehind"
+        component={TextBehind}
+        durationInFrames={VIDEO.fps * 3}
+        defaultProps={{ text: "CODE" }}
+        {...common}
+      />
+      {/* 실제 릴: scene JSON 하나로 영상 + 효과 + 자막을 합성한다 */}
+      <Composition
+        id="Reel"
+        component={Reel}
+        durationInFrames={VIDEO.fps * 10}
+        defaultProps={sampleScene as Scene}
+        calculateMetadata={({ props }) => ({
+          durationInFrames: Math.ceil(sceneDuration(props) * VIDEO.fps),
+        })}
         {...common}
       />
     </>

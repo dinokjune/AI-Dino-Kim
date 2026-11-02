@@ -1,21 +1,15 @@
 import React, { useMemo } from "react";
-import {
-  AbsoluteFill,
-  OffthreadVideo,
-  interpolate,
-  spring,
-  staticFile,
-  useCurrentFrame,
-  useVideoConfig,
-} from "remotion";
+import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { groupIntoLines } from "../captions";
 import { COLORS, FONT_FAMILY, SAFE } from "../theme";
 import type { Word } from "../types";
+import { Stage } from "./Stage";
 
 export type WordCaptionsProps = {
   words: Word[];
   /** public/ 기준 영상 경로. 없으면 어두운 배경 위에 자막만 그린다. */
   videoSrc?: string;
+  transparent?: boolean;
   /** 강조 색 */
   highlight?: string;
 };
@@ -26,6 +20,7 @@ const POP_FRAMES = 6;
 export const WordCaptions: React.FC<WordCaptionsProps> = ({
   words,
   videoSrc,
+  transparent,
   highlight = COLORS.sky,
 }) => {
   const frame = useCurrentFrame();
@@ -36,8 +31,7 @@ export const WordCaptions: React.FC<WordCaptionsProps> = ({
   const line = lines.find((l) => t >= l.start && t < l.end + 0.15);
 
   return (
-    <AbsoluteFill style={{ backgroundColor: COLORS.ink }}>
-      {videoSrc ? <OffthreadVideo src={staticFile(videoSrc)} /> : null}
+    <Stage videoSrc={videoSrc} transparent={transparent}>
       {line ? (
         <div
           style={{
@@ -48,7 +42,7 @@ export const WordCaptions: React.FC<WordCaptionsProps> = ({
             display: "flex",
             flexWrap: "wrap",
             justifyContent: "center",
-            gap: "0 24px",
+            gap: "0 34px",
             fontFamily: FONT_FAMILY,
             fontSize: FONT_SIZE,
             fontWeight: 900,
@@ -65,7 +59,7 @@ export const WordCaptions: React.FC<WordCaptionsProps> = ({
               config: { damping: 12, stiffness: 220 },
               durationInFrames: POP_FRAMES * 2,
             });
-            const scale = active ? interpolate(pop, [0, 1], [0.8, 1.12]) : 1;
+            const scale = active ? interpolate(pop, [0, 1], [0.8, 1.08]) : 1;
             return (
               <span
                 key={`${word.start}-${i}`}
@@ -84,6 +78,6 @@ export const WordCaptions: React.FC<WordCaptionsProps> = ({
           })}
         </div>
       ) : null}
-    </AbsoluteFill>
+    </Stage>
   );
 };

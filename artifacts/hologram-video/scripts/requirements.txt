@@ -1,0 +1,5 @@
+faster-whisper
+rembg[cpu]
+opencv-python-headless<5  # 5.x 에서 Caffe 모델 로더가 빠졌다
+numpy
+pillow

@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { random, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { COLORS, FONT_FAMILY, SAFE, VIDEO } from "../theme";
+import { CAPTION_TOP, COLORS, FONT_FAMILY, SAFE, VIDEO } from "../theme";
 import { Stage } from "./Stage";
 
 export type Chip = { text: string; color: string; at: number };
@@ -76,7 +76,7 @@ export const ChipsBurst: React.FC<ChipsBurstProps> = ({
           position: "absolute",
           left: SAFE.side,
           right: SAFE.right,
-          bottom: SAFE.bottom + 160,
+          bottom: VIDEO.height - CAPTION_TOP + 20,
           display: "flex",
           flexWrap: "wrap",
           justifyContent: "center",

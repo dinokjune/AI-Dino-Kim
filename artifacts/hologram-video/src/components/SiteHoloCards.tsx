@@ -8,7 +8,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import { COLORS, VIDEO } from "../theme";
+import { CAPTION_TOP, COLORS, VIDEO } from "../theme";
 import { HoloFrame } from "./HoloFrame";
 import { Stage } from "./Stage";
 
@@ -23,12 +23,14 @@ export type SiteHoloCardsProps = {
   /** 각 사이트로 넘어가는 시각(초). 첫 값이 등장 시각. 손짓 타이밍에 맞춘다 */
   switchAt: number[];
   title?: string;
+  /** 카드 윗변(px). 기본은 자막 영역 바로 위 */
+  top?: number;
   videoSrc?: string;
   transparent?: boolean;
 };
 
-const CARD_W = 860;
-const CARD_H = 560;
+const CARD_W = 760;
+const CARD_H = 440;
 const SWIPE = 0.35;
 
 const Placeholder: React.FC<{ name: string; index: number }> = ({
@@ -80,6 +82,7 @@ export const SiteHoloCards: React.FC<SiteHoloCardsProps> = ({
   sites,
   switchAt,
   title,
+  top = CAPTION_TOP - 20 - CARD_H,
   videoSrc,
   transparent,
 }) => {
@@ -93,7 +96,6 @@ export const SiteHoloCards: React.FC<SiteHoloCardsProps> = ({
     easing: Easing.out(Easing.cubic),
   });
   const left = (VIDEO.width - CARD_W) / 2;
-  const top = 1000;
 
   return (
     <Stage videoSrc={videoSrc} transparent={transparent}>

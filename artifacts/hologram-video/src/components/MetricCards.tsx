@@ -1,6 +1,6 @@
 import React from "react";
 import { Easing, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { COLORS, FONT_FAMILY, SAFE, VIDEO } from "../theme";
+import { CAPTION_TOP, COLORS, FONT_FAMILY, SAFE, VIDEO } from "../theme";
 import { HoloFrame } from "./HoloFrame";
 import { Stage } from "./Stage";
 
@@ -14,12 +14,17 @@ export type MetricCardsProps = {
   transparent?: boolean;
 };
 
-const CARD_W = 300;
+// 릴스 오른쪽 버튼 열을 피한 폭 안에 카드와 차트를 둔다
+const AREA_W = VIDEO.width - SAFE.side - SAFE.right;
+const MAX_CARD_W = 300;
 const CARD_H = 170;
 const GAP = 24;
 const FLY = 0.7;
-const CHART_W = VIDEO.width - SAFE.side * 2;
-const CHART_H = 220;
+const CHART_W = AREA_W;
+const ROW_TOP = 960;
+const CHART_TOP = ROW_TOP + CARD_H + 24;
+// 차트는 자막 영역 바로 위에서 끝난다
+const CHART_H = CAPTION_TOP - 16 - CHART_TOP;
 
 /** 물결치는 라인 차트 경로. phase가 바뀌면 오른쪽에서 왼쪽으로 흘러간다. */
 const wavePath = (phase: number): string => {
@@ -29,8 +34,8 @@ const wavePath = (phase: number): string => {
     const y =
       CHART_H * 0.75 -
       k * CHART_H * 0.45 +
-      Math.sin(k * 9 + phase) * 18 +
-      Math.sin(k * 23 + phase * 1.7) * 7;
+      Math.sin(k * 9 + phase) * CHART_H * 0.12 +
+      Math.sin(k * 23 + phase * 1.7) * CHART_H * 0.05;
     pts.push(`${x === 0 ? "M" : "L"}${x},${y.toFixed(1)}`);
   }
   return pts.join(" ");
@@ -46,9 +51,11 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
   const { fps } = useVideoConfig();
   const t = frame / fps;
 
-  const rowW = metrics.length * CARD_W + (metrics.length - 1) * GAP;
-  const rowLeft = (VIDEO.width - rowW) / 2;
-  const rowTop = 1040;
+  const n = Math.max(1, metrics.length);
+  const cardW = Math.min(MAX_CARD_W, (AREA_W - (n - 1) * GAP) / n);
+  const rowW = n * cardW + (n - 1) * GAP;
+  const rowLeft = SAFE.side + (AREA_W - rowW) / 2;
+  const rowTop = ROW_TOP;
   const draw = interpolate(t, [chartAt, chartAt + 1.2], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -65,10 +72,10 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
           easing: Easing.out(Easing.quad),
         });
         if (p <= 0) return null;
-        const tx = rowLeft + i * (CARD_W + GAP);
+        const tx = rowLeft + i * (cardW + GAP);
         const ty = rowTop;
         // 화면 밖 아래 좌/우에서 출발해 포물선으로 날아온다
-        const sx = i % 2 === 0 ? -CARD_W - 40 : VIDEO.width + 40;
+        const sx = i % 2 === 0 ? -cardW - 40 : VIDEO.width + 40;
         const sy = VIDEO.height + 40;
         const x = sx + (tx - sx) * p;
         const y = sy + (ty - sy) * p - Math.sin(p * Math.PI) * 420;
@@ -76,7 +83,7 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
         return (
           <HoloFrame
             key={m.label}
-            width={CARD_W}
+            width={cardW}
             height={CARD_H}
             style={{
               left: x,
@@ -117,7 +124,7 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
         style={{
           position: "absolute",
           left: SAFE.side,
-          top: rowTop + CARD_H + 40,
+          top: CHART_TOP,
         }}
       >
         <path
@@ -138,7 +145,7 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
           strokeOpacity={0.7}
           strokeDasharray={pathLen}
           strokeDashoffset={pathLen * (1 - draw)}
-          transform="translate(0, 30)"
+          transform={`translate(0, ${CHART_H * 0.15})`}
         />
       </svg>
     </Stage>

@@ -13,6 +13,9 @@ export const SAFE = {
   top: 160,
 } as const;
 
+/** 자막(최대 2줄)이 차지하는 영역의 윗변. 다른 그래픽은 이보다 위에 둔다 */
+export const CAPTION_TOP = 1920 - SAFE.bottom - 230;
+
 export const COLORS = {
   sky: "#38d3ff",
   pink: "#ff4fa3",

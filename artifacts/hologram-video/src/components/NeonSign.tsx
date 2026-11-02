@@ -11,6 +11,7 @@ export type NeonSignProps = {
   onAt?: number;
   fontSize?: number;
   videoSrc?: string;
+  transparent?: boolean;
 };
 
 const glow = (c: string) =>
@@ -21,6 +22,7 @@ export const NeonSign: React.FC<NeonSignProps> = ({
   onAt = 1,
   fontSize = 150,
   videoSrc,
+  transparent,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -37,7 +39,7 @@ export const NeonSign: React.FC<NeonSignProps> = ({
   const jitterX = since >= 0 ? (random(`jx-${frame}`) - 0.5) * 2 : 0;
 
   return (
-    <Stage videoSrc={videoSrc}>
+    <Stage videoSrc={videoSrc} transparent={transparent}>
       <div
         style={{
           position: "absolute",

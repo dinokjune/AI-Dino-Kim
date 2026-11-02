@@ -30,8 +30,8 @@ if (urls.length === 0) {
   process.exit(1);
 }
 
-// SiteHoloCards 카드 비율(860x506)에 맞춘 데스크톱 화면
-const VIEWPORT = { width: 1280, height: 752 };
+// SiteHoloCards 카드 내용 영역 비율(760x386)에 맞춘 데스크톱 화면
+const VIEWPORT = { width: 1280, height: 650 };
 
 const slug = (url) => {
   try {
