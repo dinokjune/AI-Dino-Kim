@@ -91,11 +91,12 @@ def check(dirpath: Path, s: dict) -> tuple[list[str], list, np.ndarray, np.ndarr
         if region.size and region.mean() > 0.10:
             issues.append(f"얼굴 가림 {region.mean() * 100:.0f}%")
 
-    both = int((gfx & cap).sum())
+    # 지나가는 장식 입자는 겹침·잘림 판정에서 뺀다(얼굴 가림은 입자까지 센다)
+    big = solid(gfx)
+    both = int((big & cap).sum())
     if both > 400:
         issues.append(f"자막과 그래픽 겹침 {both}px")
 
-    big = solid(gfx)
     if int(big[H - SAFE_BOTTOM :, :].sum()) > 2500:
         issues.append("하단 UI 영역 침범")
     if int(big[H // 2 : H - SAFE_BOTTOM, W - SAFE_RIGHT :].sum()) > 2500:
@@ -123,7 +124,7 @@ def main() -> int:
     for s in samples:
         issues, faces, gfx, cap = check(dirpath, s)
         results.append({"t": s["t"], "issues": issues, "faces": faces})
-        touching.append(edge_touch(gfx | cap))
+        touching.append(edge_touch(solid(gfx) | cap))
 
     # 잘림은 날아 들어오는 순간이 아니라 머물러 있을 때만 문제로 본다
     for i, r in enumerate(results):

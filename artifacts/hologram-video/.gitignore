@@ -3,3 +3,6 @@ out/
 public/sites/
 public/matte/
 __pycache__/
+
+# 실제 클립이 나오기 전 임시 원본·오려낸 영상
+public/draft/

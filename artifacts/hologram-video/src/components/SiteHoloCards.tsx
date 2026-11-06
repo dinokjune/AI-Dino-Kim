@@ -23,6 +23,8 @@ export type SiteHoloCardsProps = {
   /** 각 사이트로 넘어가는 시각(초). 첫 값이 등장 시각. 손짓 타이밍에 맞춘다 */
   switchAt: number[];
   title?: string;
+  /** 카드 크기 배율. 얼굴이 낮은 영상에서 줄여서 얼굴 아래에 둔다 */
+  scale?: number;
   /** 카드 윗변(px). 기본은 자막 영역 바로 위 */
   top?: number;
   videoSrc?: string;
@@ -82,7 +84,8 @@ export const SiteHoloCards: React.FC<SiteHoloCardsProps> = ({
   sites,
   switchAt,
   title,
-  top = CAPTION_TOP - 20 - CARD_H,
+  scale = 1,
+  top,
   videoSrc,
   transparent,
 }) => {
@@ -95,7 +98,10 @@ export const SiteHoloCards: React.FC<SiteHoloCardsProps> = ({
     extrapolateRight: "clamp",
     easing: Easing.out(Easing.cubic),
   });
-  const left = (VIDEO.width - CARD_W) / 2;
+  const cardW = CARD_W * scale;
+  const cardH = CARD_H * scale;
+  const cardTop = top ?? CAPTION_TOP - 20 - cardH;
+  const left = (VIDEO.width - cardW) / 2;
 
   return (
     <Stage videoSrc={videoSrc} transparent={transparent}>
@@ -128,11 +134,11 @@ export const SiteHoloCards: React.FC<SiteHoloCardsProps> = ({
           <HoloFrame
             key={site.name}
             title={label}
-            width={CARD_W}
-            height={CARD_H}
+            width={cardW}
+            height={cardH}
             style={{
               left,
-              top,
+              top: cardTop,
               opacity: appear * (1 - exit * 0.6),
               transform: `translateX(${x}px) perspective(1600px) rotateY(-10deg) rotateX(4deg)`,
             }}
